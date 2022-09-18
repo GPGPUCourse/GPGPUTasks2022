@@ -105,9 +105,8 @@ int main() {
             OCL_SAFE_CALL(clGetDeviceInfo(device, CL_DEVICE_NAME, deviceNameSize, deviceName.data(), nullptr));
             std::cout << "            Device name: " << deviceName.data() << std::endl;
             // - Тип устройства (видеокарта/процессор/что-то странное)
-            size_t deviceTypeSize = (1 << 3);  // Число взято из документации
             cl_device_type deviceType;
-            OCL_SAFE_CALL(clGetDeviceInfo(device, CL_DEVICE_TYPE, deviceTypeSize, &deviceType, nullptr));
+            OCL_SAFE_CALL(clGetDeviceInfo(device, CL_DEVICE_TYPE, sizeof(cl_device_type), &deviceType, nullptr));
             std::cout << "            Device type: ";
             if (deviceType == CL_DEVICE_TYPE_CPU) {
                 std::cout << "CPU" << std::endl;
@@ -120,16 +119,16 @@ int main() {
             }
             // - Размер памяти устройства в мегабайтах
             cl_ulong deviceMemory = 0;
-            OCL_SAFE_CALL(clGetDeviceInfo(device, CL_DEVICE_GLOBAL_MEM_SIZE, 8, &deviceMemory, nullptr));
+            OCL_SAFE_CALL(clGetDeviceInfo(device, CL_DEVICE_GLOBAL_MEM_SIZE, sizeof(deviceMemory), &deviceMemory, nullptr));
             std::cout << "            Memory size: " << deviceMemory / (1 << 20) << " MB" << std::endl;
             // - Еще пару или более свойств устройства, которые вам покажутся наиболее интересными
             // Максимальная тактовая частота устройства
             cl_uint deviceMaxClockFreq = 0;
-            OCL_SAFE_CALL(clGetDeviceInfo(device, CL_DEVICE_MAX_CLOCK_FREQUENCY, 4, &deviceMaxClockFreq, nullptr));
+            OCL_SAFE_CALL(clGetDeviceInfo(device, CL_DEVICE_MAX_CLOCK_FREQUENCY, sizeof(deviceMaxClockFreq), &deviceMaxClockFreq, nullptr));
             std::cout << "            Max clock frequency: " << deviceMaxClockFreq << " MHz" << std::endl;
             // Размер максимальной рабочей группы
             size_t deviceMaxWorkGroupSize = 0;
-            OCL_SAFE_CALL(clGetDeviceInfo(device, CL_DEVICE_MAX_WORK_GROUP_SIZE, 8, &deviceMaxWorkGroupSize, nullptr));
+            OCL_SAFE_CALL(clGetDeviceInfo(device, CL_DEVICE_MAX_WORK_GROUP_SIZE, sizeof(deviceMaxWorkGroupSize), &deviceMaxWorkGroupSize, nullptr));
             std::cout << "            Max work group size: " << deviceMaxWorkGroupSize << std::endl;
 
         }
