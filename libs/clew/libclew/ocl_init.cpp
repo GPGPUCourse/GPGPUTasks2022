@@ -31,6 +31,9 @@ OclLibrary oclLoadLibrary(void)
 	if (!lib) {
 		lib = dlopen("libOpenCL.so.1", RTLD_NOW);
 	}
+	if (!lib) {
+		lib = dlopen("OpenCL.dll", RTLD_NOW);
+	}
 	return lib;
 #endif
 }
