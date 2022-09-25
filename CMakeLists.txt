@@ -6,5 +6,7 @@ project(enumDevices)
 
 set(CMAKE_CXX_STANDARD 11)
 
+link_directories(C:/Windows/system32)
+
 add_executable(${PROJECT_NAME} src/main.cpp)
-target_link_libraries(${PROJECT_NAME} libclew)
+target_link_libraries(${PROJECT_NAME} libclew OpenCL)
