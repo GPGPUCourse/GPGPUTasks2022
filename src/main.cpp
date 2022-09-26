@@ -43,7 +43,7 @@ std::vector<T> getArrayDeviceInfo(cl_device_id deviceId, cl_device_info paramNam
 cl_device_id get_device() {
     cl_uint platformsCount = 0;
     OCL_SAFE_CALL(clGetPlatformIDs(0, nullptr, &platformsCount));
-    std::cout << "Number of OpenCL platforms: " << platformsCount << std::endl;
+    std::cout << "Number of OpenCL platforms:  " << platformsCount << std::endl;
 
     std::vector<cl_platform_id> platforms(platformsCount);
     OCL_SAFE_CALL(clGetPlatformIDs(platformsCount, platforms.data(), nullptr));
