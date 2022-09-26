@@ -73,23 +73,20 @@ int main() {
     // И хорошо бы сразу добавить в конце clReleaseContext (да, не очень RAII, но это лишь пример)
     cl_int err;
     cl_context context = clCreateContext(nullptr, 1, &mainDevice, nullptr, nullptr, &err);
-    if (err != CL_SUCCESS)
-        std::cout << "A context has not been created with error code " << err << std::endl;
+    OCL_SAFE_CALL(err);
 
     // TODO 3 Создайте очередь выполняемых команд в рамках выбранного контекста и устройства
     // См. документацию https://www.khronos.org/registry/OpenCL/sdk/1.2/docs/man/xhtml/ -> OpenCL Runtime -> Runtime APIs -> Command Queues -> clCreateCommandQueue
     // Убедитесь, что в соответствии с документацией вы создали in-order очередь задач
     // И хорошо бы сразу добавить в конце clReleaseQueue (не забывайте освобождать ресурсы)
     cl_command_queue queue = clCreateCommandQueue(context, mainDevice, 0, &err);
-    if (err != CL_SUCCESS)
-        std::cout << "A queue has not been created with error code " << err << std::endl;
+    OCL_SAFE_CALL(err);
     cl_command_queue_properties properties;
     OCL_SAFE_CALL(clGetCommandQueueInfo(queue, CL_QUEUE_PROPERTIES, sizeof(cl_command_queue_properties), &properties, nullptr));
-    bool in_order = (bool)(1 - (properties >> 1));
-    if (in_order)
-        std::cout << "An in-order command queue has been created!" << std::endl;
-    else
+    if (CL_QUEUE_OUT_OF_ORDER_EXEC_MODE_ENABLE & properties)
         std::cout << "An out-of-order command queue has been created!" << std::endl;
+    else
+        std::cout << "An in-order command queue has been created!" << std::endl;
 
     unsigned int n = 100 * 1000 * 1000;
     // Создаем два массива псевдослучайных данных для сложения и массив для будущего хранения результата
@@ -110,14 +107,11 @@ int main() {
     // или же через метод Buffer Objects -> clEnqueueWriteBuffer
     // И хорошо бы сразу добавить в конце clReleaseMemObject (аналогично, все дальнейшие ресурсы вроде OpenCL под-программы, кернела и т.п. тоже нужно освобождать)
     cl_mem as_gpu = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(float) * n, as.data(), &err);
-    if (err != CL_SUCCESS)
-        std::cout << "A buffer for 'as' has been not created with error code " << err << std::endl;
+    OCL_SAFE_CALL(err);
     cl_mem bs_gpu = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(float) * n, bs.data(), &err);
-    if (err != CL_SUCCESS)
-        std::cout << "A buffer for 'bs' has been not created with error code " << err << std::endl;
+    OCL_SAFE_CALL(err);
     cl_mem cs_gpu = clCreateBuffer(context, CL_MEM_WRITE_ONLY, sizeof(float) * n, nullptr, &err);
-    if (err != CL_SUCCESS)
-        std::cout << "A buffer for 'cs' has not been created with error code " << err << std::endl;
+    OCL_SAFE_CALL(err);
 
     // TODO 6 Выполните TODO 5 (реализуйте кернел в src/cl/aplusb.cl)
     // затем убедитесь, что выходит загрузить его с диска (убедитесь что Working directory выставлена правильно - см. описание задания),
@@ -137,8 +131,7 @@ int main() {
     // у string есть метод c_str(), но обратите внимание, что передать вам нужно указатель на указатель
     const char *kernel_sources_pointer = kernel_sources.c_str();
     cl_program program = clCreateProgramWithSource(context, 1, &kernel_sources_pointer, nullptr, &err);
-    if (err != CL_SUCCESS)
-        std::cout << "A program has not been created with error code " << err << std::endl;
+    OCL_SAFE_CALL(err);
 
     // TODO 8 Теперь скомпилируйте программу и напечатайте в консоль лог компиляции
     // см. clBuildProgram
@@ -160,8 +153,7 @@ int main() {
     // см. подходящую функцию в Runtime APIs -> Program Objects -> Kernel Objects
     const char *kernel_name = "aplusb";
     cl_kernel kernel = clCreateKernel(program, kernel_name, &err);
-    if (err != CL_SUCCESS)
-        std::cout << "A kernel has not been created with error code " << err << std::endl;
+    OCL_SAFE_CALL(err);
 
     // TODO 10 Выставите все аргументы в кернеле через clSetKernelArg (as_gpu, bs_gpu, cs_gpu и число значений, убедитесь, что тип количества элементов такой же в кернеле)
     {
