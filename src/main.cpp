@@ -139,6 +139,7 @@ int main() {
     size_t log_size = 0;
     OCL_SAFE_CALL(clGetProgramBuildInfo(program, device, CL_PROGRAM_BUILD_LOG, 0, nullptr, &log_size));
     std::vector<char> log(log_size, 0);
+    OCL_SAFE_CALL(clGetProgramBuildInfo(program, device, CL_PROGRAM_BUILD_LOG, log_size, log.data(), nullptr));
     if (log_size > 1) {
         std::cout << "Log:" << std::endl;
         std::cout << log.data() << std::endl;
@@ -152,10 +153,10 @@ int main() {
     // TODO 10 Выставите все аргументы в кернеле через clSetKernelArg (as_gpu, bs_gpu, cs_gpu и число значений, убедитесь, что тип количества элементов такой же в кернеле)
     {
          unsigned int i = 0;
-         clSetKernelArg(kernel, i++, sizeof(cl_mem), &clAs);
-         clSetKernelArg(kernel, i++, sizeof(cl_mem), &clBs);
-         clSetKernelArg(kernel, i++, sizeof(cl_mem), &clCs);
-         clSetKernelArg(kernel, i, sizeof(unsigned int), &n);
+         OCL_SAFE_CALL(clSetKernelArg(kernel, i++, sizeof(cl_mem), &clAs));
+         OCL_SAFE_CALL(clSetKernelArg(kernel, i++, sizeof(cl_mem), &clBs));
+         OCL_SAFE_CALL(clSetKernelArg(kernel, i++, sizeof(cl_mem), &clCs));
+         OCL_SAFE_CALL(clSetKernelArg(kernel, i, sizeof(unsigned int), &n));
     }
 
     // TODO 11 Выше увеличьте n с 1000*1000 до 100*1000*1000 (чтобы дальнейшие замеры были ближе к реальности)
