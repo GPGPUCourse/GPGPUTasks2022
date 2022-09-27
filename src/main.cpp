@@ -43,13 +43,14 @@ bool getOpenCLDeviceOfType(int deviceType, cl_device_id &device) {
 
     for (auto platform : platforms) {
         cl_uint devicesCount = 0;
-        OCL_SAFE_CALL(clGetDeviceIDs(platform, deviceType, 0, nullptr, &devicesCount));
-        if (devicesCount != 0) {
-            std::vector<cl_device_id> devices(devicesCount);
-            OCL_SAFE_CALL(clGetDeviceIDs(platform, CL_DEVICE_TYPE_ALL, devicesCount, devices.data(), nullptr));
-            device = devices.front();
-            return true;
-        }
+        int res = clGetDeviceIDs(platform, deviceType, 0, nullptr, &devicesCount);
+        if (res == CL_DEVICE_NOT_FOUND)
+            continue;
+        OCL_CHECK_ERROR(res);
+        std::vector<cl_device_id> devices(devicesCount);
+        OCL_SAFE_CALL(clGetDeviceIDs(platform, CL_DEVICE_TYPE_ALL, devicesCount, devices.data(), nullptr));
+        device = devices.front();
+        return true;
     }
     return false;
 }
