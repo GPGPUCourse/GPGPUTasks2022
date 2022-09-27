@@ -65,7 +65,29 @@ int main() {
     cl_platform_id platform;
     cl_device_id device;
     if (get_device(CL_DEVICE_TYPE_GPU, &platform, &device) == CL_DEVICE_NOT_FOUND)
-        get_device(CL_DEVICE_TYPE_CPU, &platform, &device);
+        if (get_device(CL_DEVICE_TYPE_CPU, &platform, &device) == CL_DEVICE_NOT_FOUND)
+            OCL_SAFE_CALL(get_device(CL_DEVICE_TYPE_ALL, &platform, &device));
+
+    // - Название устройства
+    size_t deviceNameSize = 0;
+    OCL_SAFE_CALL(clGetDeviceInfo(device, CL_DEVICE_NAME, 0, nullptr, &deviceNameSize));
+    std::vector<unsigned char> deviceName(deviceNameSize, 0);
+    OCL_SAFE_CALL(clGetDeviceInfo(device, CL_DEVICE_NAME, deviceNameSize, deviceName.data(), nullptr));
+    std::cout << "Device name: " << deviceName.data() << std::endl;
+
+    // - Тип устройства (видеокарта/процессор/что-то странное)
+    cl_device_type deviceType = 0;
+    OCL_SAFE_CALL(clGetDeviceInfo(device, CL_DEVICE_TYPE, sizeof(cl_device_type), &deviceType, nullptr));
+    std::string deviceTypeName;
+    if (deviceType == CL_DEVICE_TYPE_DEFAULT)
+        deviceTypeName = "DEFAULT";
+    if (deviceType & CL_DEVICE_TYPE_CPU)
+        deviceTypeName += "CPU ";
+    if (deviceType & CL_DEVICE_TYPE_GPU)
+        deviceTypeName += "GPU ";
+    if (deviceType & CL_DEVICE_TYPE_ACCELERATOR)
+        deviceTypeName += "ACCELERATOR ";
+    std::cout << "Device type: " << deviceTypeName << std::endl;
 
     // Создайте контекст с выбранным устройством
     // См. документацию https://www.khronos.org/registry/OpenCL/sdk/1.2/docs/man/xhtml/ -> OpenCL Runtime -> Contexts -> clCreateContext
