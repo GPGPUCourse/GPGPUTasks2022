@@ -141,11 +141,11 @@ int main() {
         timer t;// Это вспомогательный секундомер, он замеряет время своего создания и позволяет усреднять время нескольких замеров
         for (unsigned int i = 0; i < 20; ++i) {
             // clEnqueueNDRangeKernel...
-            auto *event = (cl_event *) malloc(sizeof(cl_event));
+            cl_event event;
             OCL_SAFE_CALL(clEnqueueNDRangeKernel(queue, kernel, 1, nullptr, &global_work_size, &workGroupSize, 0,
-                                                 nullptr, event));
+                                                 nullptr, &event));
             // clWaitForEvents...
-            OCL_SAFE_CALL(clWaitForEvents(1, event));
+            OCL_SAFE_CALL(clWaitForEvents(1, &event));
             t.nextLap();// При вызове nextLap секундомер запоминает текущий замер (текущий круг) и начинает замерять время следующего круга
         }
         // Среднее время круга (вычисления кернела) на самом деле считается не по всем замерам, а лишь с 20%-перцентайля по 80%-перцентайль (как и стандартное отклонение)
@@ -153,7 +153,7 @@ int main() {
         // P.S. чтобы в CLion быстро перейти к символу (функции/классу/много чему еще), достаточно нажать Ctrl+Shift+Alt+N -> lapsFiltered -> Enter
         std::cout << "Kernel average time: " << t.lapAvg() << "+-" << t.lapStd() << " s" << std::endl;
 
-        std::cout << "GFlops: " << n / t.lapAvg() << std::endl;
+        std::cout << "GFlops: " << n / t.lapAvg() / 1e9 << std::endl;
 
         std::cout << "VRAM bandwidth: " << (double) 3 * sizeof(float) * n / 1024 / 1024 / 1024 / t.lapAvg() << " GB/s"
                   << std::endl;

@@ -4,7 +4,7 @@
 
 #line 8
 
-__kernel void aplusb(__global float *a, __global float *b, __global float *c, unsigned int n) {
+__kernel void aplusb(__global const float *a, __global const float *b, __global float *c, const unsigned int n) {
     size_t i = get_global_id(0);
 
     if (i >= n) {
