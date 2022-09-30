@@ -76,9 +76,7 @@ int main() {
     // И хорошо бы сразу добавить в конце clReleaseContext (да, не очень RAII, но это лишь пример)
     cl_int context_errcode;
     cl_context context = clCreateContext(nullptr, 1, &mainDevice, nullptr, nullptr, &context_errcode);
-    if (context_errcode != CL_SUCCESS) {
-        std::cout << "Failed to create context with error code: " << context_errcode << std::endl;
-    }
+    OCL_SAFE_CALL(context_errcode);
 
     // TODO 3 Создайте очередь выполняемых команд в рамках выбранного контекста и устройства
     // См. документацию https://www.khronos.org/registry/OpenCL/sdk/1.2/docs/man/xhtml/ -> OpenCL Runtime -> Runtime APIs -> Command Queues -> clCreateCommandQueue
@@ -87,9 +85,7 @@ int main() {
 
     cl_int queue_errcode;
     cl_command_queue commandQueue = clCreateCommandQueue(context, mainDevice, 0, &queue_errcode);
-    if (queue_errcode != CL_SUCCESS) {
-        std::cout << "Failed to create queue with error code: " << queue_errcode << std::endl;
-    }
+    OCL_SAFE_CALL(queue_errcode);
 
     unsigned int n = 100 * 1000 * 1000;
     // Создаем два массива псевдослучайных данных для сложения и массив для будущего хранения результата
@@ -112,18 +108,12 @@ int main() {
     cl_int error;
     cl_mem as_gpu = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_USE_HOST_PTR, sizeof(float) * n, as.data(),
                                    &error);
-    if (error != CL_SUCCESS) {
-        std::cout << "Failed to create buffer as with error code: " << error << std::endl;
-    }
+    OCL_SAFE_CALL(error);
     cl_mem bs_gpu = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_USE_HOST_PTR, sizeof(float) * n, bs.data(),
                                    &error);
-    if (error != CL_SUCCESS) {
-        std::cout << "Failed to create buffer bs with error code: " << error << std::endl;
-    }
+    OCL_SAFE_CALL(error);
     cl_mem cs_gpu = clCreateBuffer(context, CL_MEM_WRITE_ONLY, sizeof(float) * n, nullptr, &error);
-    if (error != CL_SUCCESS) {
-        std::cout << "Failed to create buffer cs with error code: " << error << std::endl;
-    }
+    OCL_SAFE_CALL(error);
 
     // TODO 6 Выполните TODO 5 (реализуйте кернел в src/cl/aplusb.cl)
     // затем убедитесь, что выходит загрузить его с диска (убедитесь что Working directory выставлена правильно - см. описание задания),
@@ -143,6 +133,7 @@ int main() {
     // у string есть метод c_str(), но обратите внимание, что передать вам нужно указатель на указатель
     const char *strings = kernel_sources.c_str();
     cl_program program = clCreateProgramWithSource(context, 1, &strings, nullptr, &error);
+    OCL_SAFE_CALL(error);
 
     // TODO 8 Теперь скомпилируйте программу и напечатайте в консоль лог компиляции
     // см. clBuildProgram
@@ -163,9 +154,7 @@ int main() {
     // см. подходящую функцию в Runtime APIs -> Program Objects -> Kernel Objects
     const char *kernel_name = "aplusb";
     cl_kernel kernel = clCreateKernel(program, kernel_name, &error);
-    if (error != CL_SUCCESS) {
-        std::cout << "Failed to create kernel with error code: " << error << std::endl;
-    }
+    OCL_SAFE_CALL(error);
 
     // TODO 10 Выставите все аргументы в кернеле через clSetKernelArg (as_gpu, bs_gpu, cs_gpu и число значений, убедитесь, что тип количества элементов такой же в кернеле)
     {
