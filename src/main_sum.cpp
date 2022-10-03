@@ -4,7 +4,7 @@
 #include <libgpu/context.h>
 #include <libgpu/shared_device_buffer.h>
 
-#include "cl/sum.cl.h"
+#include "cl/sum_cl.h"
 
 
 template<typename T>
