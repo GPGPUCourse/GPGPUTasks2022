@@ -33,6 +33,30 @@ void reportError(cl_int err, const std::string &filename, int line)
 
 #define OCL_SAFE_CALL(expr) reportError(expr, __FILE__, __LINE__)
 
+cl_int get_device(cl_device_type deviceType, cl_platform_id *dst_platform, cl_device_id* dst_device) {
+    cl_uint platformCount = 0;
+    OCL_SAFE_CALL(clGetPlatformIDs(0, nullptr, &platformCount));
+    std::vector <cl_platform_id> platforms(platformCount);
+    OCL_SAFE_CALL(clGetPlatformIDs(platformCount, platforms.data(), nullptr));
+
+    for (size_t platformIndex = 0; platformIndex < platformCount; platformIndex++) {
+        cl_platform_id platform = platforms[platformIndex];
+
+        cl_uint deviceCount = 0;
+        cl_int error = clGetDeviceIDs(platform, deviceType, 0, nullptr, &deviceCount);
+        if (error != CL_DEVICE_NOT_FOUND && error != CL_SUCCESS)
+            OCL_SAFE_CALL(error);
+
+        if (deviceCount == 0)
+            continue;
+
+        *dst_platform = platform;
+        OCL_SAFE_CALL(clGetDeviceIDs(platform, deviceType, 1, dst_device, nullptr));
+        return CL_SUCCESS;
+    }
+
+    return CL_DEVICE_NOT_FOUND;
+}
 
 int main()
 {
@@ -42,6 +66,11 @@ int main()
 
     // TODO 1 По аналогии с предыдущим заданием узнайте, какие есть устройства, и выберите из них какое-нибудь
     // (если в списке устройств есть хоть одна видеокарта - выберите ее, если нету - выбирайте процессор)
+    cl_platform_id platform;
+    cl_device_id device;
+    if (get_device(CL_DEVICE_TYPE_GPU, &platform, &device) == CL_DEVICE_NOT_FOUND)
+        if (get_device(CL_DEVICE_TYPE_CPU, &platform, &device) == CL_DEVICE_NOT_FOUND)
+            OCL_SAFE_CALL(get_device(CL_DEVICE_TYPE_ALL, &platform, &device));
 
     // TODO 2 Создайте контекст с выбранным устройством
     // См. документацию https://www.khronos.org/registry/OpenCL/sdk/1.2/docs/man/xhtml/ -> OpenCL Runtime -> Contexts -> clCreateContext
