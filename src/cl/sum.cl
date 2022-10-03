@@ -14,10 +14,13 @@ __kernel void atomic_sum(__global unsigned int* res, __global const unsigned int
 }
 
 __kernel void iter_sum(__global unsigned int* res, __global const unsigned int* data, const unsigned int n) {
-   const unsigned int index = get_global_id(0);
+   const unsigned int id = get_global_id(0);
    unsigned int sum = 0;
    for (int i = 0; i < VALUES_PER_WORK_ITEM; i++) {
-      sum += data[index * VALUES_PER_WORK_ITEM + i];
+      const unsigned int index = id * VALUES_PER_WORK_ITEM + i;
+      if (index < n) {
+         sum += data[index];
+      }
    }
    atomic_add(res, sum);
 }
