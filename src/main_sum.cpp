@@ -2,6 +2,9 @@
 #include <libutils/timer.h>
 #include <libutils/fast_random.h>
 
+#include "libgpu/shared_device_buffer.h"
+#include "cl/sum_cl.h"
+#include "libgpu/context.h"
 
 template<typename T>
 void raiseFail(const T &a, const T &b, std::string message, std::string filename, int line)
@@ -14,6 +17,8 @@ void raiseFail(const T &a, const T &b, std::string message, std::string filename
 
 #define EXPECT_THE_SAME(a, b, message) raiseFail(a, b, message, __FILE__, __LINE__)
 
+#define VALUES_PER_WORK_ITEM 64
+#define WORK_GROUP_SIZE 128
 
 int main(int argc, char **argv)
 {
@@ -58,7 +63,48 @@ int main(int argc, char **argv)
     }
 
     {
-        // TODO: implement on OpenCL
-        // gpu::Device device = gpu::chooseGPUDevice(argc, argv);
+        gpu::Device device = gpu::chooseGPUDevice(argc, argv);
+        gpu::Context context;
+        context.init(device.device_id_opencl);
+        context.activate();
+
+        const size_t numOfMethods = 3;
+        std::vector<std::pair<std::string, unsigned int>> global_work_size_by_method{
+                {"global_atomic_sum",   (n + WORK_GROUP_SIZE - 1) / WORK_GROUP_SIZE * WORK_GROUP_SIZE},
+                {"cycle_sum",           ((n + VALUES_PER_WORK_ITEM - 1) / VALUES_PER_WORK_ITEM + WORK_GROUP_SIZE - 1) /
+                                        WORK_GROUP_SIZE * WORK_GROUP_SIZE},
+                {"cycle_coalesced_sum", ((n + VALUES_PER_WORK_ITEM - 1) / VALUES_PER_WORK_ITEM + WORK_GROUP_SIZE - 1) /
+                                        WORK_GROUP_SIZE * WORK_GROUP_SIZE},
+                {"local_mem_main_thread_sum", (n + WORK_GROUP_SIZE - 1) / WORK_GROUP_SIZE * WORK_GROUP_SIZE},
+                {"tree_sum", (n + WORK_GROUP_SIZE - 1) / WORK_GROUP_SIZE * WORK_GROUP_SIZE}
+        };
+        for (const auto& item : global_work_size_by_method) {
+            std::string kernel_name = item.first;
+            unsigned int global_work_size = item.second;
+            ocl::Kernel kernel(sum_kernel, sum_kernel_length, kernel_name);
+            kernel.compile();
+
+            gpu::gpu_mem_32u as_gpu;
+            as_gpu.resizeN(n);
+            as_gpu.writeN(as.data(), n);
+
+            gpu::gpu_mem_32u res_gpu;
+            res_gpu.resizeN(1);
+
+            unsigned int res;
+            timer t;
+            for (int iter = 0; iter < benchmarkingIters; ++iter) {
+                res = 0;
+                res_gpu.writeN(&res, 1);
+                kernel.exec(gpu::WorkSize(WORK_GROUP_SIZE, global_work_size),
+                            as_gpu, n, res_gpu);
+                res_gpu.readN(&res, 1);
+                EXPECT_THE_SAME(reference_sum, res, "GPU " + kernel_name + " result should be consistent!");
+                t.nextLap();
+            }
+
+            std::cout << "GPU " + kernel_name + ": " << t.lapAvg() << "+-" << t.lapStd() << " s" << std::endl;
+            std::cout << "GPU " + kernel_name + ": " << (n/1000.0/1000.0) / t.lapAvg() << " millions/s" << std::endl;
+        }
     }
 }
