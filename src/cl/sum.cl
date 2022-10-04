@@ -19,7 +19,7 @@ __kernel void sum_gpu_2(__global const int *xs, int n, __global int *res) {
 
     int sum = 0;
     for (int i = 0; i < VALUES_PER_WORK_ITEM; ++i) {
-        index = id * VALUES_PER_WORK_ITEM + i;
+        unsigned int index = id * VALUES_PER_WORK_ITEM + i;
         if (index >= n)
             return;
         sum += xs[index];
@@ -34,7 +34,10 @@ __kernel void sum_gpu_3(__global const int *xs, int n, __global int *res) {
 
     int sum = 0;
     for (int i = 0; i < VALUES_PER_WORK_ITEM; ++i) {
-        sum += xs[groupId * groupSize * VALUES_PER_WORK_ITEM + i * groupSize + localId];
+        unsigned int index = groupId * groupSize * VALUES_PER_WORK_ITEM + i * groupSize + localId;
+        if (index >= n)
+            return;
+        sum += xs[index];
     }
     atomic_add(res, sum);
 }
