@@ -20,9 +20,8 @@ __kernel void sum_gpu_2(__global const int *xs, int n, __global int *res) {
     int sum = 0;
     for (int i = 0; i < VALUES_PER_WORK_ITEM; ++i) {
         unsigned int index = id * VALUES_PER_WORK_ITEM + i;
-        if (index >= n)
-            return;
-        sum += xs[index];
+        if (index < n)
+            sum += xs[index];
     }
     atomic_add(res, sum);
 }
