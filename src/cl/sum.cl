@@ -1,4 +1,4 @@
-__kernel void sum1(__global const unsigned int* as, unsigned int n, __global int* res) {
+__kernel void atomic_sum(__global const unsigned int* as, unsigned int n, __global int* res) {
     int id = get_global_id(0);
     if (id >= n) {
         return;
@@ -8,8 +8,8 @@ __kernel void sum1(__global const unsigned int* as, unsigned int n, __global int
 
 
 #define VALUES_PER_WORK_ITEM 64
-__kernel void sum2(__global const unsigned int* as, unsigned int n, __global int* res) {
-    int id = get_global_id(0);
+__kernel void iter_sum(__global const unsigned int* as, unsigned int n, __global int* res) {
+    size_t id = get_global_id(0);
 
     unsigned int sum = 0;
     for (int i = 0; i < VALUES_PER_WORK_ITEM; i++) {
@@ -23,7 +23,7 @@ __kernel void sum2(__global const unsigned int* as, unsigned int n, __global int
 }
 
 
-__kernel void sum3(__global const unsigned int* as, unsigned int n, __global int* res) {
+__kernel void coalesced_sum(__global const unsigned int* as, unsigned int n, __global int* res) {
     int local_id = get_local_id(0);
     int group_id = get_group_id(0);
     int group_size = get_local_size(0);
@@ -41,7 +41,7 @@ __kernel void sum3(__global const unsigned int* as, unsigned int n, __global int
 
 
 #define WORK_GROUP_SIZE 128
-__kernel void sum4(__global const unsigned int* as, unsigned int n, __global int* res) {
+__kernel void local_sum(__global const unsigned int* as, unsigned int n, __global int* res) {
     int local_id = get_local_id(0);
     int global_id = get_global_id(0);
 
@@ -59,7 +59,7 @@ __kernel void sum4(__global const unsigned int* as, unsigned int n, __global int
 }
 
 
-__kernel void sum5(__global const unsigned int* as, unsigned int n, __global int* res) {
+__kernel void tree_sum(__global const unsigned int* as, unsigned int n, __global int* res) {
     int local_id = get_local_id(0);
     int global_id = get_global_id(0);
 
