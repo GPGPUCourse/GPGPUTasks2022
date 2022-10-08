@@ -31,8 +31,9 @@ __kernel void sumLoopCoalesced(__global const uint* a, uint n, __global uint* re
         return;
 
     uint sum = 0;
-    for (size_t j = 0; j < WPT && offset + j < n; ++j)
-        sum += a[offset + j * groupSize + li];
+    for (size_t j = 0; j < WPT; ++j)
+        if (offset + j * groupSize + li < n)
+            sum += a[offset + j * groupSize + li];
 
     atomic_add(result, sum);
 }
