@@ -26,7 +26,7 @@ __kernel void matrix_multiplication(__global float* A, __global float* B, __glob
     size_t i = get_global_id(0);
     size_t j = get_global_id(1);
 
-    if (i >= M || j >= N)
+    if (i >= N || j >= M)
         return;
 
     size_t li = get_local_id(0);
@@ -65,6 +65,10 @@ __kernel void matrix_multiplication2(__global float* A, __global float* B, __glo
     uint M, uint K, uint N) {
     size_t i = get_global_id(0); // 0..n
     size_t j = get_global_id(1); // 0..m/stripeSize
+
+    if (i >= N || j >= M)
+        return;
+
     size_t li = get_local_id(0); // 0..tileSize
     size_t lj = get_local_id(1); // 0..tileSize/stripeSize
 

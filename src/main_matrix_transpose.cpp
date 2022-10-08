@@ -49,7 +49,7 @@ int main(int argc, char **argv)
             // В CLion удобно смотреть какие есть вариант аргументов в конструкторах:
             // поставьте каретку редактирования кода внутри скобок конструктора WorkSize -> Ctrl+P -> заметьте что есть 2, 4 и 6 параметров
             // - для 1D, 2D и 3D рабочего пространства соответственно
-            matrix_transpose_kernel.exec(gpu::WorkSize(16, 16, M, K), as_gpu, as_t_gpu, M, K);
+            matrix_transpose_kernel.exec(gpu::WorkSize(16, 16, K, M), as_gpu, as_t_gpu, M, K);
 
             t.nextLap();
         }
@@ -60,10 +60,10 @@ int main(int argc, char **argv)
     as_t_gpu.readN(as_t.data(), M*K);
 
     // Проверяем корректность результатов
-    for (int i = 0; i < M; ++i) {
-        for (int j = 0; j < K; ++j) {
-            float a = as[j * M + i];
-            float b = as_t[i * K + j];
+    for (int j = 0; j < M; ++j) {
+        for (int i = 0; i < K; ++i) {
+            float a = as[j * K + i];
+            float b = as_t[i * M + j];
             if (a != b) {
                 std::cerr << "Not the same!" << std::endl;
                 return 1;
