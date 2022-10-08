@@ -20,7 +20,7 @@ int main(int argc, char **argv)
     context.activate();
 
     int benchmarkingIters = 10;
-    int cpuBenchmarkingIters = 1;
+    int cpuBenchmarkingIters = 3;
     unsigned int M = 1024;
     unsigned int K = 512;
     unsigned int N = 2 * 1024;
