@@ -23,8 +23,8 @@ inline Mtx mtx_create(__global float* a, size_t m, size_t n) {
 
 __kernel void matrix_multiplication(__global float* A, __global float* B, __global float* C,
     uint M, uint K, uint N) {
-    size_t i = get_global_id(0);
-    size_t j = get_global_id(1);
+    size_t i = get_global_id(0); // 0..N
+    size_t j = get_global_id(1); // 0..M
 
     if (i >= N || j >= M)
         return;
@@ -63,8 +63,8 @@ __kernel void matrix_multiplication(__global float* A, __global float* B, __glob
 
 __kernel void matrix_multiplication2(__global float* A, __global float* B, __global float* C,
     uint M, uint K, uint N) {
-    size_t i = get_global_id(0); // 0..n
-    size_t j = get_global_id(1); // 0..m/stripeSize
+    size_t i = get_global_id(0); // 0..N
+    size_t j = get_global_id(1); // 0..M/stripeSize
 
     if (i >= N || j >= M)
         return;

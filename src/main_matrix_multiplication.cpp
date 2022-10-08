@@ -20,7 +20,7 @@ int main(int argc, char **argv)
     context.activate();
 
     int benchmarkingIters = 10;
-    int cpuBenchmarkingIters = 5;
+    int cpuBenchmarkingIters = 1;
     unsigned int M = 1024;
     unsigned int K = 512;
     unsigned int N = 2 * 1024;
@@ -60,10 +60,11 @@ int main(int argc, char **argv)
 
     const std::vector<float> cs_cpu_reference = cs;
 
-    gpu::gpu_mem_32f as_gpu, bs_gpu, cs_gpu;
+    gpu::gpu_mem_32f as_gpu, bs_gpu, cs_gpu, cs2_gpu;
     as_gpu.resizeN(M*K);
     bs_gpu.resizeN(K*N);
     cs_gpu.resizeN(M*N);
+    cs2_gpu.resizeN(M*N);
 
     as_gpu.writeN(as.data(), M*K);
     bs_gpu.writeN(bs.data(), K*N);
@@ -93,7 +94,7 @@ int main(int argc, char **argv)
     {
       timer t;
       for (int iter = 0; iter < benchmarkingIters; ++iter) {
-        matrix_multiplication2_kernel.exec(gpu::WorkSize(tileSize, tileSize / stripeSize, N, M / stripeSize), as_gpu, bs_gpu, cs_gpu, M, K, N);
+        matrix_multiplication2_kernel.exec(gpu::WorkSize(tileSize, tileSize / stripeSize, N, M / stripeSize), as_gpu, bs_gpu, cs2_gpu, M, K, N);
 
         t.nextLap();
       }
@@ -102,7 +103,7 @@ int main(int argc, char **argv)
       std::cout << "GPU: " << gflop / t.lapAvg() << " GFlops\n" << std::endl;
     }
 
-    cs_gpu.readN(cs2.data(), M*N);
+    cs2_gpu.readN(cs2.data(), M*N);
 
     // Проверяем корректность результатов
     double diff_sum = 0;
