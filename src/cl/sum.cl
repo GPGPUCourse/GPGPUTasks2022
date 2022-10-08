@@ -41,11 +41,12 @@ __kernel void sumMajorWorker(__global const uint* a, uint n, __global uint* resu
     size_t i = get_global_id(0);
     size_t li = get_local_id(0);
     size_t groupSize = get_local_size(0);
-    if (i >= n)
-        return;
 
     __local uint buf[256];
-    buf[li] = a[i];
+    if (i < n)
+        buf[li] = a[i];
+    else
+        buf[li] = 0;
 
     barrier(CLK_LOCAL_MEM_FENCE);
 
@@ -58,48 +59,44 @@ __kernel void sumMajorWorker(__global const uint* a, uint n, __global uint* resu
     }
 }
 
-unsigned int sumLocalTree(__global const uint* a, uint n) {
+void sumLocalTree(__global const uint* a, uint n, __local uint* buf) {
     size_t i = get_global_id(0);
     size_t li = get_local_id(0);
     size_t groupSize = get_local_size(0);
 
-    __local uint buf[256];
-    buf[li] = a[i];
+    if (i < n)
+        buf[li] = a[i];
+    else
+        buf[li] = 0;
 
     barrier(CLK_LOCAL_MEM_FENCE);
 
     for (size_t w = groupSize; w > 1; w /= 2) {
-        if (li * 2 < w && i + w / 2 < n) {
+        if (li * 2 < w) {
             buf[li] += buf[li + w / 2];
         }
 
         barrier(CLK_LOCAL_MEM_FENCE);
     }
-
-    return buf[0];
 }
 
 __kernel void sumTree(__global const uint* a, uint n, __global uint* result) {
-size_t i = get_global_id(0);
-size_t li = get_local_id(0);
+    size_t li = get_local_id(0);
 
-if (i >= n)
-return;
+    __local uint buf[256];
+    sumLocalTree(a, n, buf);
 
-uint sum = sumLocalTree(a, n);
-if (li == 0)
-atomic_add(result, sum);
+    if (li == 0)
+        atomic_add(result, buf[0]);
 }
 
 __kernel void sumTreeRecursive(__global const uint* a, uint n, __global uint* result) {
-    size_t i = get_global_id(0);
     size_t li = get_local_id(0);
     size_t gi = get_group_id(0);
 
-    if (i >= n)
-        return;
+    __local uint buf[256];
+    sumLocalTree(a, n, buf);
 
-    uint sum = sumLocalTree(a, n);
     if (li == 0)
-        result[gi] = sum;
+        result[gi] = buf[0];
 }
