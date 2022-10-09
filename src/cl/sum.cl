@@ -47,7 +47,11 @@ __kernel void sum_gpu_4(__global const unsigned int* xs, int n, __global unsigne
    int global_id = get_global_id(0);
 
    __local unsigned int local_xs[WORK_GROUP_SIZE];
-   local_xs[local_id] = xs[global_id];
+   if (global_id < n) {
+       local_xs[local_id] = xs[global_id];
+   } else {
+       local_xs[local_id] = 0;
+   }
 
    barrier(CLK_LOCAL_MEM_FENCE);
    if (local_id == 0) {
@@ -64,7 +68,11 @@ __kernel void sum_gpu_5(__global const unsigned int* xs, int n, __global unsigne
    int global_id = get_global_id(0);
 
    __local unsigned int local_xs[WORK_GROUP_SIZE];
-   local_xs[local_id] = xs[global_id];
+    if (global_id < n) {
+        local_xs[local_id] = xs[global_id];
+    } else {
+        local_xs[local_id] = 0;
+    }
 
    barrier(CLK_LOCAL_MEM_FENCE);
    for (int nvalues = WORK_GROUP_SIZE; nvalues > 1; nvalues /= 2) {
