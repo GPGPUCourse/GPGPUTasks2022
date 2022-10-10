@@ -59,6 +59,8 @@ __kernel void matrix_multiplication(__global float* A, __global float* B, __glob
 }
 
 
+#define stripeSize 8
+
 __kernel void matrix_multiplication2(__global float* A, __global float* B, __global float* C,
     uint M, uint K, uint N) {
     size_t i = get_global_id(0); // 0..N
@@ -69,7 +71,6 @@ __kernel void matrix_multiplication2(__global float* A, __global float* B, __glo
 
     size_t tileSize = get_local_size(0);
     size_t numTileStripes = get_local_size(1);
-    size_t stripeSize = tileSize / numTileStripes;
     size_t numTiles = (K + tileSize - 1) / tileSize;
 
     Mtx a = mtx_create(A, M, K);
