@@ -10,6 +10,56 @@
 #include <iostream>
 #include <stdexcept>
 
+#define THREAD_WORK 4
+
+void gpu_routine(std::string kernel_name,
+                 const gpu::gpu_mem_32f& as_gpu, const gpu::gpu_mem_32f& bs_gpu, gpu::gpu_mem_32f& cs_gpu,
+                 const std::vector<float>& cs_cpu_reference,
+                 unsigned int M, unsigned int N, unsigned int K,
+                 unsigned int gflops, bool is_optimized = false, int benchmarkingIters = 10) {
+   ocl::Kernel matrix_multiplication_kernel(matrix_multiplication, matrix_multiplication_length, kernel_name);
+   matrix_multiplication_kernel.compile();
+
+   {
+      timer t;
+      for (int iter = 0; iter < benchmarkingIters; ++iter) {
+         unsigned int work_group_size = 16;
+         unsigned int x_work_size = (M + work_group_size - 1) / work_group_size * work_group_size;
+         unsigned int y_work_size = (N + work_group_size - 1) / work_group_size * work_group_size;
+         if (is_optimized) {
+            y_work_size /= THREAD_WORK;
+         }
+         matrix_multiplication_kernel.exec(
+               gpu::WorkSize(work_group_size, work_group_size, x_work_size, y_work_size),
+               as_gpu, bs_gpu, cs_gpu, M, K, N);
+
+         t.nextLap();
+      }
+      std::cout << '\n' << kernel_name << " statistics:\n";
+      std::cout << "GPU: " << t.lapAvg() << "+-" << t.lapStd() << " s" << std::endl;
+      std::cout << "GPU: " << gflops / t.lapAvg() << " GFlops" << std::endl;
+   }
+   std::vector<float> cs(M*N, 0);
+   cs_gpu.readN(cs.data(), M*N);
+
+   // Проверяем корректность результатов
+   double diff_sum = 0;
+   for (int i = 0; i < M * N; ++i) {
+      double a = cs[i];
+      double b = cs_cpu_reference[i];
+      if (a != 0.0 && b != 0.0) {
+         double diff = fabs(a - b) / std::max(fabs(a), fabs(b));
+         diff_sum += diff;
+      }
+   }
+
+   double diff_avg = diff_sum / (M * N);
+   std::cout << "Average difference: " << diff_avg * 100.0 << "%" << std::endl;
+   if (diff_avg > 0.01) {
+      std::cerr << "Too big difference!" << std::endl;
+      return;
+   }
+}
 
 int main(int argc, char **argv)
 {
@@ -66,44 +116,8 @@ int main(int argc, char **argv)
     as_gpu.writeN(as.data(), M*K);
     bs_gpu.writeN(bs.data(), K*N);
 
-    ocl::Kernel matrix_multiplication_kernel(matrix_multiplication, matrix_multiplication_length, "matrix_multiplication");
-    matrix_multiplication_kernel.compile();
-
-    {
-        timer t;
-        for (int iter = 0; iter < benchmarkingIters; ++iter) {
-            unsigned int work_group_size = 16;
-            unsigned int x_work_size = (M + work_group_size - 1) / work_group_size * work_group_size;
-            unsigned int y_work_size = (N + work_group_size - 1) / work_group_size * work_group_size;
-            matrix_multiplication_kernel.exec(
-                  gpu::WorkSize(work_group_size, work_group_size, x_work_size, y_work_size),
-                  as_gpu, bs_gpu, cs_gpu, M, K, N);
-
-            t.nextLap();
-        }
-        std::cout << "GPU: " << t.lapAvg() << "+-" << t.lapStd() << " s" << std::endl;
-        std::cout << "GPU: " << gflops / t.lapAvg() << " GFlops" << std::endl;
-    }
-
-    cs_gpu.readN(cs.data(), M*N);
-
-    // Проверяем корректность результатов
-    double diff_sum = 0;
-    for (int i = 0; i < M * N; ++i) {
-        double a = cs[i];
-        double b = cs_cpu_reference[i];
-        if (a != 0.0 && b != 0.0) {
-            double diff = fabs(a - b) / std::max(fabs(a), fabs(b));
-            diff_sum += diff;
-        }
-    }
-
-    double diff_avg = diff_sum / (M * N);
-    std::cout << "Average difference: " << diff_avg * 100.0 << "%" << std::endl;
-    if (diff_avg > 0.01) {
-        std::cerr << "Too big difference!" << std::endl;
-        return 1;
-    }
+    gpu_routine("matrix_multiplication", as_gpu, bs_gpu, cs_gpu, cs_cpu_reference, M, N, K, gflops);
+    gpu_routine("matrix_multiplication_updated", as_gpu, bs_gpu, cs_gpu, cs_cpu_reference, M, N, K, gflops, true);
 
     return 0;
 }
