@@ -3,7 +3,7 @@ __kernel void matrix_transpose(__global float *a, __global float *at, unsigned i
 {
     int i = get_global_id(0); // column id
     int j = get_global_id(1); // row id
-    __local float tile[TILE_SIZE][TILE_SIZE + 1]; // one element in every row for fake element and fix bank-conflicts
+    __local float tile[TILE_SIZE][TILE_SIZE + 1]; // one element in every row for fake element which fix bank-conflicts
     int local_i = get_local_id(0); // local column id
     int local_j = get_local_id(1); // local row id
 
