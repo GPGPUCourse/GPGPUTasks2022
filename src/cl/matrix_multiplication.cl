@@ -14,7 +14,7 @@ __kernel void matrix_multiplication(__global const float* a, __global const floa
 
    __local float local_a[TILE_SIZE][TILE_SIZE];
    __local float local_b[TILE_SIZE][TILE_SIZE];
-   __local float local_c[TILE_SIZE][TILE_SIZE];
+   float sum = 0;
    for (size_t step = 0; step * TILE_SIZE < K; step++) {
       local_a[local_i][local_j] = a[i * K + local_j + step * TILE_SIZE];
       local_b[local_i][local_j] = b[(local_i + step * TILE_SIZE) * N + j];
@@ -22,13 +22,13 @@ __kernel void matrix_multiplication(__global const float* a, __global const floa
 
       // update local_c
       for (size_t index = 0; index < TILE_SIZE; index++) {
-         local_c[local_i][local_j] += local_a[local_i][index] * local_b[index][local_j];
+         sum += local_a[local_i][index] * local_b[index][local_j];
       }
 
       barrier(CLK_LOCAL_MEM_FENCE);
    }
 
    if (i < M && j < N) {
-      c[i * N + j] = local_c[local_i][local_j];
+      c[i * N + j] = sum;
    }
 }
