@@ -5,11 +5,12 @@ typedef struct Mtx {
 } Mtx;
 
 inline float mtx_get(Mtx m, uint i, uint j) {
-    return m.a[j * m.n + i];
+    return (i < m.n && j < m.m) ? m.a[j * m.n + i] : 0;
 }
 
 inline void mtx_set(Mtx m, uint i, uint j, float v) {
-    m.a[j * m.n + i] = v;
+    if (i < m.n && j < m.m)
+        m.a[j * m.n + i] = v;
 }
 
 inline Mtx mtx_create(__global float* a, size_t m, size_t n) {
@@ -26,14 +27,11 @@ __kernel void matrix_multiplication(__global float* A, __global float* B, __glob
     size_t i = get_global_id(0); // 0..N
     size_t j = get_global_id(1); // 0..M
 
-    if (i >= N || j >= M)
-        return;
-
     size_t li = get_local_id(0);
     size_t lj = get_local_id(1);
 
     size_t tileSize = get_local_size(0);
-    size_t numTiles = K / tileSize;
+    size_t numTiles = (K + tileSize - 1) / tileSize;
 
     Mtx a = mtx_create(A, M, K);
     Mtx b = mtx_create(B, K, N);
@@ -66,16 +64,13 @@ __kernel void matrix_multiplication2(__global float* A, __global float* B, __glo
     size_t i = get_global_id(0); // 0..N
     size_t j = get_global_id(1); // 0..M/stripeSize
 
-    if (i >= N || j >= M)
-        return;
-
     size_t li = get_local_id(0); // 0..tileSize
     size_t lj = get_local_id(1); // 0..tileSize/stripeSize
 
     size_t tileSize = get_local_size(0);
     size_t numTileStripes = get_local_size(1);
     size_t stripeSize = tileSize / numTileStripes;
-    size_t numTiles = K / tileSize;
+    size_t numTiles = (K + tileSize - 1) / tileSize;
 
     Mtx a = mtx_create(A, M, K);
     Mtx b = mtx_create(B, K, N);

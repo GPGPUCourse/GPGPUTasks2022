@@ -11,6 +11,10 @@
 #include <stdexcept>
 
 
+size_t roundUpToMultiple(size_t x, size_t divisor) {
+    return (x + divisor - 1) / divisor * divisor;
+}
+
 int main(int argc, char **argv)
 {
     gpu::Device device = gpu::chooseGPUDevice(argc, argv);
@@ -21,9 +25,9 @@ int main(int argc, char **argv)
 
     int benchmarkingIters = 10;
     int cpuBenchmarkingIters = 3;
-    unsigned int M = 1024;
-    unsigned int K = 512;
-    unsigned int N = 2 * 1024;
+    unsigned int M = 1024 + 5;
+    unsigned int K = 512 + 7;
+    unsigned int N = 2 * 1024 + 9;
     const size_t gflop = ((size_t) M * K * N * 2) / (1000 * 1000 * 1000); // умножить на два, т.к. операция сложения и умножения
 
     std::vector<float> as(M*K, 0);
@@ -75,7 +79,10 @@ int main(int argc, char **argv)
     {
       timer t;
       for (int iter = 0; iter < benchmarkingIters; ++iter) {
-        matrix_multiplication_kernel.exec(gpu::WorkSize(16, 16, N, M), as_gpu, bs_gpu, cs_gpu, M, K, N);
+        matrix_multiplication_kernel.exec(
+            gpu::WorkSize(16, 16, roundUpToMultiple(N, 16), roundUpToMultiple(M, 16)),
+            as_gpu, bs_gpu, cs_gpu, M, K, N
+        );
 
         t.nextLap();
       }
@@ -94,7 +101,11 @@ int main(int argc, char **argv)
     {
       timer t;
       for (int iter = 0; iter < benchmarkingIters; ++iter) {
-        matrix_multiplication2_kernel.exec(gpu::WorkSize(tileSize, tileSize / stripeSize, N, M / stripeSize), as_gpu, bs_gpu, cs2_gpu, M, K, N);
+        matrix_multiplication2_kernel.exec(
+            gpu::WorkSize(tileSize, tileSize / stripeSize,
+                  roundUpToMultiple(N, tileSize), roundUpToMultiple((M + stripeSize - 1) / stripeSize, tileSize / stripeSize)),
+              as_gpu, bs_gpu, cs2_gpu, M, K, N
+          );
 
         t.nextLap();
       }
