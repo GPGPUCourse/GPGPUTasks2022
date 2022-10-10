@@ -76,8 +76,8 @@ __kernel void matrix_multiplication2(__global float* A, __global float* B, __glo
     Mtx b = mtx_create(B, K, N);
     Mtx c = mtx_create(C, M, N);
 
-    __local float tileA[33][33];
-    __local float tileB[33][33];
+    __local float tileA[32][32];
+    __local float tileB[32][32];
     float sum[16];
     for (size_t w = 0; w < stripeSize; ++w) {
         sum[w] = 0.0f;
@@ -86,13 +86,13 @@ __kernel void matrix_multiplication2(__global float* A, __global float* B, __glo
     for (size_t t = 0; t < numTiles; ++t) {
         for (size_t w = 0; w < stripeSize; ++w) {
             tileA[lj * stripeSize + w][li] = mtx_get(a, t * tileSize + li, j * stripeSize + w);
-            tileB[li][lj * stripeSize + w] = mtx_get(b, i, t * tileSize + lj * stripeSize + w);
+            tileB[lj * stripeSize + w][li] = mtx_get(b, i, t * tileSize + lj * stripeSize + w);
         }
 
         barrier(CLK_LOCAL_MEM_FENCE);
 
         for (size_t l = 0; l < tileSize; ++l) {
-            float tmp = tileB[li][l];
+            float tmp = tileB[l][li];
             for (size_t w = 0; w < stripeSize; ++w) {
                 sum[w] += tileA[lj * stripeSize + w][l] * tmp;
             }
