@@ -9,7 +9,6 @@
 #include <vector>
 #include <iostream>
 #include <stdexcept>
-#include <iomanip>
 
 
 bool check_result(unsigned int M, unsigned int N,
@@ -61,15 +60,6 @@ void gpu_running(const std::string &kernel_name,
 }
 
 
-void print(unsigned int N, unsigned int M, std::vector<float> &cs) {
-    for (int j = 0; j < M; j++) {
-        for (int i = 0; i < N; i++) {
-            std::cout << std::fixed << std::showpoint << std::setprecision(2) << cs[j * N + i] << " ";
-        }
-        std::cout << '\n';
-    }
-}
-
 int main(int argc, char **argv)
 {
     gpu::Device device = gpu::chooseGPUDevice(argc, argv);
@@ -78,7 +68,7 @@ int main(int argc, char **argv)
     context.init(device.device_id_opencl);
     context.activate();
 
-    int benchmarkingIters = 1;
+    int benchmarkingIters = 10;
     unsigned int M = 1024;
     unsigned int K = 1024;
     unsigned int N = 1024;
