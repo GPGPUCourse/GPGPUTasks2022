@@ -11,6 +11,10 @@
 #include <stdexcept>
 
 
+size_t roundUpToMultiple(size_t x, size_t divisor) {
+    return (x + divisor - 1) / divisor * divisor;
+}
+
 int main(int argc, char **argv)
 {
     gpu::Device device = gpu::chooseGPUDevice(argc, argv);
@@ -20,8 +24,8 @@ int main(int argc, char **argv)
     context.activate();
 
     int benchmarkingIters = 10;
-    unsigned int M = 4 * 1024;
-    unsigned int K = 8 * 1024;
+    unsigned int M = 4 * 1024 + 5;
+    unsigned int K = 8 * 1024 + 7;
 
     std::vector<float> as(M*K, 0);
     std::vector<float> as_t(M*K, 0);
@@ -39,17 +43,20 @@ int main(int argc, char **argv)
     as_gpu.writeN(as.data(), M*K);
 
     ocl::Kernel matrix_transpose_kernel(matrix_transpose, matrix_transpose_length, "matrix_transpose");
-    matrix_transpose_kernel.compile(true);
+    matrix_transpose_kernel.compile();
 
     {
         timer t;
         for (int iter = 0; iter < benchmarkingIters; ++iter) {
+            const size_t groupSize = 16;
+
             // Для этой задачи естественнее использовать двухмерный NDRange. Чтобы это сформулировать
             // в терминологии библиотеки - нужно вызвать другую вариацию конструктора WorkSize.
             // В CLion удобно смотреть какие есть вариант аргументов в конструкторах:
             // поставьте каретку редактирования кода внутри скобок конструктора WorkSize -> Ctrl+P -> заметьте что есть 2, 4 и 6 параметров
             // - для 1D, 2D и 3D рабочего пространства соответственно
-            matrix_transpose_kernel.exec(gpu::WorkSize(16, 16, K, M), as_gpu, as_t_gpu, M, K);
+            matrix_transpose_kernel.exec(gpu::WorkSize(groupSize, groupSize, roundUpToMultiple(K, groupSize),
+                                                       roundUpToMultiple(M, groupSize)), as_gpu, as_t_gpu, M, K);
 
             t.nextLap();
         }
