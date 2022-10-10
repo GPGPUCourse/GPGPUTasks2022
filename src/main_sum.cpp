@@ -18,9 +18,10 @@ void raiseFail(const T &a, const T &b, std::string message, std::string filename
 
 #define EXPECT_THE_SAME(a, b, message) raiseFail(a, b, message, __FILE__, __LINE__)
 #define WORK_GROUP_SIZE 128
+#define VALUES_PER_WORK_ITEM 64
 
 void gpu_routine(const std::string& kernel_name, const gpu::gpu_mem_32u& gpu_data,
-                 unsigned int reference_sum, unsigned int n, int benchmark_iters = 10){
+                 unsigned int reference_sum, unsigned int n, bool is_trim_needed=false, int benchmark_iters = 10){
    ocl::Kernel atomic_sum(sum_kernel, sum_kernel_length, kernel_name);
    atomic_sum.compile();
    timer t;
@@ -32,6 +33,9 @@ void gpu_routine(const std::string& kernel_name, const gpu::gpu_mem_32u& gpu_dat
 
       unsigned int workGroupSize = WORK_GROUP_SIZE;
       unsigned int global_work_size = (n + workGroupSize - 1) / workGroupSize * workGroupSize;
+      if (is_trim_needed) {
+         global_work_size /= VALUES_PER_WORK_ITEM;
+      }
       atomic_sum.exec(gpu::WorkSize(workGroupSize, global_work_size),
                       gpu_sum, gpu_data,n);
 
