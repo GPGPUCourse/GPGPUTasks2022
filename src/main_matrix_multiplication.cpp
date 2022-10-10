@@ -38,27 +38,26 @@ int main(int argc, char **argv)
     }
     std::cout << "Data generated for M=" << M << ", K=" << K << ", N=" << N << "!" << std::endl;
 
-    {
-        timer t;
-        for (int iter = 0; iter < benchmarkingIters; ++iter) {
-            for (int j = 0; j < M; ++j) {
-                for (int i = 0; i < N; ++i) {
-                    float sum = 0.0f;
-                    for (int k = 0; k < K; ++k) {
-                        sum += as.data()[j * K + k] * bs.data()[k * N + i];
-                    }
-                    cs.data()[j * N + i] = sum;
-                }
-            }
-            t.nextLap();
-        }
-        std::cout << "CPU: " << t.lapAvg() << "+-" << t.lapStd() << " s" << std::endl;
-        std::cout << "CPU: " << gflops / t.lapAvg() << " GFlops" << std::endl;
-    }
+//    {
+//        timer t;
+//        for (int iter = 0; iter < benchmarkingIters; ++iter) {
+//            for (int j = 0; j < M; ++j) {
+//                for (int i = 0; i < N; ++i) {
+//                    float sum = 0.0f;
+//                    for (int k = 0; k < K; ++k) {
+//                        sum += as.data()[j * K + k] * bs.data()[k * N + i];
+//                    }
+//                    cs.data()[j * N + i] = sum;
+//                }
+//            }
+//            t.nextLap();
+//        }
+//        std::cout << "CPU: " << t.lapAvg() << "+-" << t.lapStd() << " s" << std::endl;
+//        std::cout << "CPU: " << gflops / t.lapAvg() << " GFlops" << std::endl;
+//    }
 
     const std::vector<float> cs_cpu_reference = cs;
 
-    /*
     gpu::gpu_mem_32f as_gpu, bs_gpu, cs_gpu;
     as_gpu.resizeN(M*K);
     bs_gpu.resizeN(K*N);
@@ -73,10 +72,12 @@ int main(int argc, char **argv)
     {
         timer t;
         for (int iter = 0; iter < benchmarkingIters; ++iter) {
-            // TODO
-            unsigned int work_group_size = 128;
-            unsigned int global_work_size = ...;
-            matrix_multiplication_kernel.exec(gpu::WorkSize(work_group_size, global_work_size), as_gpu, bs_gpu, cs_gpu, M, K, N);
+            unsigned int work_group_size = 16;
+            unsigned int x_work_size = (M + work_group_size - 1) / work_group_size * work_group_size;
+            unsigned int y_work_size = (N + work_group_size - 1) / work_group_size * work_group_size;
+            matrix_multiplication_kernel.exec(
+                  gpu::WorkSize(work_group_size, work_group_size, x_work_size, y_work_size),
+                  as_gpu, bs_gpu, cs_gpu, M, K, N);
 
             t.nextLap();
         }
@@ -85,7 +86,6 @@ int main(int argc, char **argv)
     }
 
     cs_gpu.readN(cs.data(), M*N);
-    */
 
     // Проверяем корректность результатов
     double diff_sum = 0;

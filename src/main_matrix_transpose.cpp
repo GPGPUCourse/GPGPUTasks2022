@@ -32,7 +32,6 @@ int main(int argc, char **argv)
     }
     std::cout << "Data generated for M=" << M << ", K=" << K << "!" << std::endl;
 
-    /*
     gpu::gpu_mem_32f as_gpu, as_t_gpu;
     as_gpu.resizeN(M*K);
     as_t_gpu.resizeN(K*M);
@@ -45,16 +44,15 @@ int main(int argc, char **argv)
     {
         timer t;
         for (int iter = 0; iter < benchmarkingIters; ++iter) {
-            // TODO
-            unsigned int work_group_size = 128;
-            unsigned int global_work_size = ...;
+            unsigned int work_group_size = 16;
+            unsigned int x_work_size = (M + work_group_size - 1) / work_group_size * work_group_size;
+            unsigned int y_work_size = (K + work_group_size - 1) / work_group_size * work_group_size;
             // Для этой задачи естественнее использовать двухмерный NDRange. Чтобы это сформулировать
             // в терминологии библиотеки - нужно вызвать другую вариацию конструктора WorkSize.
             // В CLion удобно смотреть какие есть вариант аргументов в конструкторах:
             // поставьте каретку редактирования кода внутри скобок конструктора WorkSize -> Ctrl+P -> заметьте что есть 2, 4 и 6 параметров
             // - для 1D, 2D и 3D рабочего пространства соответственно
-            matrix_transpose_kernel.exec(gpu::WorkSize(work_group_size, global_work_size), as_gpu, as_t_gpu, M, K);
-
+            matrix_transpose_kernel.exec(gpu::WorkSize(work_group_size, work_group_size, x_work_size, y_work_size), as_gpu, as_t_gpu, M, K);
             t.nextLap();
         }
         std::cout << "GPU: " << t.lapAvg() << "+-" << t.lapStd() << " s" << std::endl;
@@ -74,7 +72,6 @@ int main(int argc, char **argv)
             }
         }
     }
-    */
 
     return 0;
 }
