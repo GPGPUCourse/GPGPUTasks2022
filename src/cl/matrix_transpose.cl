@@ -5,7 +5,7 @@ __kernel void matrix_transpose(__global const float* src, // m x n
                                __global       float* dst, // n x m
                                unsigned int m, unsigned int n)
 {
-  __local float chunk[CHUNK_WIDTH * CHUNK_HEIGHT];
+  __local float chunk[CHUNK_HEIGHT][CHUNK_WIDTH];
   /*
    src:
    a b c
@@ -28,7 +28,7 @@ __kernel void matrix_transpose(__global const float* src, // m x n
   if (i_src < m && j_src < n) {
     int j_chunk_local_dst = i_chunk_src;
     int i_chunk_local_dst = j_chunk_src;
-    chunk[i_chunk_local_dst * CHUNK_HEIGHT + j_chunk_local_dst] = src[j_unraveled];
+    chunk[i_chunk_local_dst][j_chunk_local_dst] = src[j_unraveled];
   }
 
   barrier(CLK_LOCAL_MEM_FENCE);
@@ -43,7 +43,7 @@ __kernel void matrix_transpose(__global const float* src, // m x n
   int i_dst = i_base_dst + i_chunk_dst;
 
   if (i_dst < n && j_dst < m) {
-    dst[i_dst * m + j_dst] = chunk[j_chunk_unraveled];
+    dst[i_dst * m + j_dst] = chunk[i_chunk_src][j_chunk_src];
   }
 }
 
@@ -54,7 +54,7 @@ __kernel void matrix_transpose_skewed(__global const float* src, // m x n
                                       __global       float* dst, // n x m
                                       unsigned int m, unsigned int n)
 {
-  __local float chunk[SKEWED_CHUNK_WIDTH * SKEWED_CHUNK_HEIGHT];
+  __local float chunk[SKEWED_CHUNK_HEIGHT][SKEWED_CHUNK_WIDTH + SKEWED_CHUNK_HEIGHT - 1];
   /*
    src:
    a b c
@@ -77,7 +77,7 @@ __kernel void matrix_transpose_skewed(__global const float* src, // m x n
   if (i_src < m && j_src < n) {
     int i_chunk_local_dst = j_chunk_src;
     int j_chunk_local_dst = i_chunk_src;
-    chunk[i_chunk_local_dst * SKEWED_CHUNK_WIDTH + (j_chunk_local_dst + i_chunk_local_dst)] = src[j_unraveled];
+    chunk[i_chunk_local_dst][j_chunk_local_dst + i_chunk_local_dst] = src[j_unraveled];
   }
 
   barrier(CLK_LOCAL_MEM_FENCE);
@@ -92,6 +92,6 @@ __kernel void matrix_transpose_skewed(__global const float* src, // m x n
   int i_dst = i_base_dst + i_chunk_dst;
 
   if (i_dst < n && j_dst < m) {
-    dst[i_dst * m + j_dst] = chunk[i_chunk_dst * SKEWED_CHUNK_WIDTH + (j_chunk_dst + i_chunk_dst)];
+    dst[i_dst * m + j_dst] = chunk[i_chunk_dst][j_chunk_dst + i_chunk_dst];
   }
 }
