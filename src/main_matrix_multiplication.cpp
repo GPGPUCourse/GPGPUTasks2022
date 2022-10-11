@@ -58,7 +58,7 @@ int main(int argc, char **argv)
 
     const std::vector<float> cs_cpu_reference = cs;
 
-    /*
+
     gpu::gpu_mem_32f as_gpu, bs_gpu, cs_gpu;
     as_gpu.resizeN(M*K);
     bs_gpu.resizeN(K*N);
@@ -67,16 +67,29 @@ int main(int argc, char **argv)
     as_gpu.writeN(as.data(), M*K);
     bs_gpu.writeN(bs.data(), K*N);
 
-    ocl::Kernel matrix_multiplication_kernel(matrix_multiplication, matrix_multiplication_length, "matrix_multiplication");
-    matrix_multiplication_kernel.compile();
+
+    size_t work_group_size = 128;
+    size_t tile_size = 32;
+    std::string defines = " -D WORK_GROUP_SIZE=" + to_string(work_group_size);
+    defines += " -D TILE_SIZE=" + to_string(tile_size);
+    ocl::Kernel matrix_multiplication_local_mem_kernel(
+        matrix_multiplication,
+        matrix_multiplication_length,
+        "matrix_multiplication_local_mem",
+        defines
+    );
+    matrix_multiplication_local_mem_kernel.compile();
 
     {
         timer t;
         for (int iter = 0; iter < benchmarkingIters; ++iter) {
-            // TODO
-            unsigned int work_group_size = 128;
-            unsigned int global_work_size = ...;
-            matrix_multiplication_kernel.exec(gpu::WorkSize(work_group_size, global_work_size), as_gpu, bs_gpu, cs_gpu, M, K, N);
+            size_t N_tiles = (N + tile_size - 1) / tile_size;
+            size_t M_tiles = (M + tile_size - 1) / tile_size;
+            unsigned int global_work_size = N_tiles * M_tiles * work_group_size;
+            matrix_multiplication_local_mem_kernel.exec(
+                gpu::WorkSize(work_group_size, global_work_size),
+                as_gpu, bs_gpu, cs_gpu, M, K, N
+            );
 
             t.nextLap();
         }
@@ -85,7 +98,6 @@ int main(int argc, char **argv)
     }
 
     cs_gpu.readN(cs.data(), M*N);
-    */
 
     // Проверяем корректность результатов
     double diff_sum = 0;
@@ -97,6 +109,22 @@ int main(int argc, char **argv)
             diff_sum += diff;
         }
     }
+
+//    std::cout << "-----------------------\n";
+//    for (int i = 0; i < M; i++) {
+//        for (int j = 0; j < N; j++) {
+//            std::cout << cs[i * N + j] << " ";
+//        }
+//        std::cout << std::endl;
+//    }
+//    std::cout << "-----------------------\n";
+//    for (int i = 0; i < M; i++) {
+//        for (int j = 0; j < N; j++) {
+//            std::cout << cs_cpu_reference[i * N + j] << " ";
+//        }
+//        std::cout << std::endl;
+//    }
+//    std::cout << "-----------------------\n";
 
     double diff_avg = diff_sum / (M * N);
     std::cout << "Average difference: " << diff_avg * 100.0 << "%" << std::endl;
