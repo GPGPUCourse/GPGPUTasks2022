@@ -32,22 +32,26 @@ int main(int argc, char **argv)
     }
     std::cout << "Data generated for M=" << M << ", K=" << K << "!" << std::endl;
 
-    /*
+
     gpu::gpu_mem_32f as_gpu, as_t_gpu;
     as_gpu.resizeN(M*K);
     as_t_gpu.resizeN(K*M);
 
     as_gpu.writeN(as.data(), M*K);
 
-    ocl::Kernel matrix_transpose_kernel(matrix_transpose, matrix_transpose_length, "matrix_transpose");
+    size_t work_group_size = 128;
+    size_t tile_size = 32;
+    std::string defines = " -D WORK_GROUP_SIZE=" + to_string(work_group_size);
+    defines += " -D TILE_SIZE=" + to_string(tile_size);
+    ocl::Kernel matrix_transpose_kernel(matrix_transpose, matrix_transpose_length, "matrix_transpose", defines);
     matrix_transpose_kernel.compile();
 
     {
         timer t;
         for (int iter = 0; iter < benchmarkingIters; ++iter) {
-            // TODO
-            unsigned int work_group_size = 128;
-            unsigned int global_work_size = ...;
+            size_t K_tiles = (K + tile_size - 1) / tile_size;
+            size_t M_tiles = (M + tile_size - 1) / tile_size;
+            size_t global_work_size = K_tiles * M_tiles * work_group_size;
             // Для этой задачи естественнее использовать двухмерный NDRange. Чтобы это сформулировать
             // в терминологии библиотеки - нужно вызвать другую вариацию конструктора WorkSize.
             // В CLion удобно смотреть какие есть вариант аргументов в конструкторах:
@@ -74,7 +78,6 @@ int main(int argc, char **argv)
             }
         }
     }
-    */
 
     return 0;
 }
