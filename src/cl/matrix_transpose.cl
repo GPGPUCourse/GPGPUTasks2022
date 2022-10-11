@@ -4,6 +4,7 @@
 
 #line 6
 
+#define TILE_SIZE 16
 __kernel void matrix_transpose(__global const float* as,
                                __global float* as_t,
                                unsigned int M,
@@ -18,13 +19,13 @@ __kernel void matrix_transpose(__global const float* as,
         return;
 
     __local float las[256];
-    las[local_index_1 * 16 + local_index_2] = as[global_index_1 * M + global_index_2];
+    las[local_index_1 * TILE_SIZE + local_index_2] = as[global_index_1 * M + global_index_2];
 
     barrier(CLK_LOCAL_MEM_FENCE);
     __local float las_t[256];
-    las_t[local_index_2 * 16 + local_index_1] = las[local_index_1 * 16 + local_index_2];
+    las_t[local_index_2 * TILE_SIZE + local_index_1] = las[local_index_1 * TILE_SIZE + local_index_2];
     barrier(CLK_LOCAL_MEM_FENCE);
 
-    as_t[global_index_2 * K + global_index_1] = las_t[local_index_2 * 16 + local_index_1];
+    as_t[global_index_2 * K + global_index_1] = las_t[local_index_2 * TILE_SIZE + local_index_1];
 
 }
