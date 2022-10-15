@@ -57,14 +57,16 @@ int main(int argc, char **argv) {
     bs_gpu.resizeN(n);
     {
         ocl::Kernel merge(merge_kernel, merge_kernel_length, "merge");
+        ocl::Kernel mergeLocal(merge_kernel, merge_kernel_length, "mergeLocal");
         merge.compile();
+        unsigned int workGroupSize = 256;
+        unsigned int global_work_size = (n + workGroupSize - 1) / workGroupSize * workGroupSize;
         timer t;
         for (int iter = 0; iter < benchmarkingIters; ++iter) {
             as_gpu.writeN(as.data(), n);
             t.restart();// Запускаем секундомер после прогрузки данных, чтобы замерять время работы кернела, а не трансфера данных
-            unsigned int workGroupSize = 128;
-            unsigned int global_work_size = (n + workGroupSize - 1) / workGroupSize * workGroupSize;
-            for (uint32_t i = 1; i < n; i *= 2) {
+            mergeLocal.exec(gpu::WorkSize(workGroupSize, global_work_size), as_gpu, n);
+            for (uint32_t i = workGroupSize; i < n; i *= 2) {
                 merge.exec(gpu::WorkSize(workGroupSize, global_work_size), as_gpu, i, n, bs_gpu);
                 bs_gpu.swap(as_gpu);
 
