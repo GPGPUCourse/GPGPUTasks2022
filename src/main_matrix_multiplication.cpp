@@ -18,7 +18,7 @@ bool check_result(unsigned int M, unsigned int N,
     for (int i = 0; i < M * N; ++i) {
         double a = cs[i];
         double b = cs_cpu_reference[i];
-        if (a != 0.0 && b != 0.0) {
+        if (a != 0.0 || b != 0.0) {
             double diff = fabs(a - b) / std::max(fabs(a), fabs(b));
             diff_sum += diff;
         }
@@ -68,7 +68,7 @@ int main(int argc, char **argv)
     context.init(device.device_id_opencl);
     context.activate();
 
-    int benchmarkingIters = 10;
+    int benchmarkingIters = 1;
     unsigned int M = 1024;
     unsigned int K = 1024;
     unsigned int N = 1024;
@@ -121,7 +121,7 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    gpu_running("matrix_multiplication_2", as_gpu, bs_gpu, cs_gpu, gpu::WorkSize(4, 16, N / 4, M),
+    gpu_running("matrix_multiplication_2", as_gpu, bs_gpu, cs_gpu, gpu::WorkSize(16, 4, N, M / 4),
                 M, N, K, benchmarkingIters, gflops, cs);
     if (!check_result(M, N, cs, cs_cpu_reference)) {
         return 1;
