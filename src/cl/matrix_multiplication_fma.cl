@@ -5,6 +5,7 @@
 #line 6
 
 #define GROUP_SIDE_SIZE 32
+#define GROUP_DIV 31
 #define GROUP_TILE_SIZE 8
 
 __kernel void matrix_multiplication_fma(__global const float *as, __global const float *bs, __global float *cs, unsigned int M, unsigned int K, unsigned int N) {
@@ -30,15 +31,16 @@ __kernel void matrix_multiplication_fma(__global const float *as, __global const
         for (unsigned  int j = 0; j < GROUP_TILE_SIZE; j++) {
             unsigned int xb = global_x * GROUP_TILE_SIZE + j;
             unsigned int yb = i + local_y;
-            storage_b[local_y][local_x * GROUP_TILE_SIZE + j] = bs[yb * N + xb];
+            storage_b[local_y][(local_y + local_x * GROUP_TILE_SIZE + j) & GROUP_DIV] = bs[yb * N + xb];
         }
 
         barrier(CLK_LOCAL_MEM_FENCE);
 
         for (unsigned int j = 0; j < GROUP_SIDE_SIZE; j++) {
-            float c = storage_a[local_y][j];
+            unsigned int ind = (j + local_y) & GROUP_DIV;
+            float c = storage_a[local_y][ind];
             for (unsigned int k = 0; k < GROUP_TILE_SIZE; k++) {
-                res[k] += c * storage_b[j][local_x * GROUP_TILE_SIZE + k];
+                res[k] += c * storage_b[ind][(ind + local_x * GROUP_TILE_SIZE + k) & GROUP_DIV];
             }
         }
 
