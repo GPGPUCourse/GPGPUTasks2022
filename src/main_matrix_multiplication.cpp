@@ -16,21 +16,22 @@ void gpu_routine(std::string kernel_name,
                  const gpu::gpu_mem_32f& as_gpu, const gpu::gpu_mem_32f& bs_gpu, gpu::gpu_mem_32f& cs_gpu,
                  const std::vector<float>& cs_cpu_reference,
                  unsigned int M, unsigned int N, unsigned int K,
-                 unsigned int gflops, bool is_optimized = false, int benchmarkingIters = 10) {
+                 unsigned int gflops, int benchmarkingIters, bool is_optimized = false) {
    ocl::Kernel matrix_multiplication_kernel(matrix_multiplication, matrix_multiplication_length, kernel_name);
    matrix_multiplication_kernel.compile();
 
    {
       timer t;
       for (int iter = 0; iter < benchmarkingIters; ++iter) {
-         unsigned int work_group_size = 16;
-         unsigned int x_work_size = (M + work_group_size - 1) / work_group_size * work_group_size;
-         unsigned int y_work_size = (N + work_group_size - 1) / work_group_size * work_group_size;
+         unsigned int x_work_group_size = 16;
+         unsigned int y_work_group_size = is_optimized ? 4 : 16;
+         unsigned int x_work_size = (M + x_work_group_size - 1) / x_work_group_size * x_work_group_size;
+         unsigned int y_work_size = (N + y_work_group_size - 1) / y_work_group_size * y_work_group_size;
          if (is_optimized) {
             y_work_size /= THREAD_WORK;
          }
          matrix_multiplication_kernel.exec(
-               gpu::WorkSize(work_group_size, work_group_size, x_work_size, y_work_size),
+               gpu::WorkSize(x_work_group_size, y_work_group_size, x_work_size, y_work_size),
                as_gpu, bs_gpu, cs_gpu, M, K, N);
 
          t.nextLap();
@@ -47,7 +48,7 @@ void gpu_routine(std::string kernel_name,
    for (int i = 0; i < M * N; ++i) {
       double a = cs[i];
       double b = cs_cpu_reference[i];
-      if (a != 0.0 && b != 0.0) {
+      if (a != 0.0 || b != 0.0) {
          double diff = fabs(a - b) / std::max(fabs(a), fabs(b));
          diff_sum += diff;
       }
@@ -88,23 +89,23 @@ int main(int argc, char **argv)
     }
     std::cout << "Data generated for M=" << M << ", K=" << K << ", N=" << N << "!" << std::endl;
 
-//    {
-//        timer t;
-//        for (int iter = 0; iter < benchmarkingIters; ++iter) {
-//            for (int j = 0; j < M; ++j) {
-//                for (int i = 0; i < N; ++i) {
-//                    float sum = 0.0f;
-//                    for (int k = 0; k < K; ++k) {
-//                        sum += as.data()[j * K + k] * bs.data()[k * N + i];
-//                    }
-//                    cs.data()[j * N + i] = sum;
-//                }
-//            }
-//            t.nextLap();
-//        }
-//        std::cout << "CPU: " << t.lapAvg() << "+-" << t.lapStd() << " s" << std::endl;
-//        std::cout << "CPU: " << gflops / t.lapAvg() << " GFlops" << std::endl;
-//    }
+    {
+        timer t;
+        for (int iter = 0; iter < benchmarkingIters; ++iter) {
+            for (int j = 0; j < M; ++j) {
+                for (int i = 0; i < N; ++i) {
+                    float sum = 0.0f;
+                    for (int k = 0; k < K; ++k) {
+                        sum += as.data()[j * K + k] * bs.data()[k * N + i];
+                    }
+                    cs.data()[j * N + i] = sum;
+                }
+            }
+            t.nextLap();
+        }
+        std::cout << "CPU: " << t.lapAvg() << "+-" << t.lapStd() << " s" << std::endl;
+        std::cout << "CPU: " << gflops / t.lapAvg() << " GFlops" << std::endl;
+    }
 
     const std::vector<float> cs_cpu_reference = cs;
 
@@ -116,8 +117,9 @@ int main(int argc, char **argv)
     as_gpu.writeN(as.data(), M*K);
     bs_gpu.writeN(bs.data(), K*N);
 
-    gpu_routine("matrix_multiplication", as_gpu, bs_gpu, cs_gpu, cs_cpu_reference, M, N, K, gflops);
-    gpu_routine("matrix_multiplication_updated", as_gpu, bs_gpu, cs_gpu, cs_cpu_reference, M, N, K, gflops, true);
+    gpu_routine("matrix_multiplication", as_gpu, bs_gpu, cs_gpu, cs_cpu_reference, M, N, K, gflops, benchmarkingIters);
+    gpu_routine("matrix_multiplication_coalesced", as_gpu, bs_gpu, cs_gpu, cs_cpu_reference, M, N, K, gflops, benchmarkingIters);
+    gpu_routine("matrix_multiplication_updated", as_gpu, bs_gpu, cs_gpu, cs_cpu_reference, M, N, K, gflops, benchmarkingIters, true);
 
     return 0;
 }
