@@ -116,7 +116,7 @@ int main(int argc, char **argv)
             // TODO
             unsigned int work_group_size = 32;
             unsigned int tile_size = 8;
-            matrix_multiplication_fma_kernel.exec(gpu::WorkSize(work_group_size / tile_size, work_group_size, N / tile_size, M), as_gpu, bs_gpu, cs_gpu, M, K, N);
+            matrix_multiplication_fma_kernel.exec(gpu::WorkSize(work_group_size, work_group_size / tile_size, N, M / tile_size), as_gpu, bs_gpu, cs_gpu, M, K, N);
 
             t.nextLap();
         }

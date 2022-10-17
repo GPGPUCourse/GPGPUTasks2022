@@ -5,7 +5,6 @@
 #line 6
 
 #define GROUP_SIDE_SIZE 32
-#define GROUP_DIV 31
 #define GROUP_TILE_SIZE 8
 
 __kernel void matrix_multiplication_fma(__global const float *as, __global const float *bs, __global float *cs, unsigned int M, unsigned int K, unsigned int N) {
@@ -23,24 +22,23 @@ __kernel void matrix_multiplication_fma(__global const float *as, __global const
     }
     for (unsigned int i = 0; i < K; i += GROUP_SIDE_SIZE) {
         for (unsigned int j = 0; j < GROUP_TILE_SIZE; j++) {
-            unsigned int xa = i + local_x * GROUP_TILE_SIZE + j;
-            unsigned int ya = global_y;
-            storage_a[local_y][local_x * GROUP_TILE_SIZE + j] = as[ya * K + xa];
+            unsigned int xa = i + local_x;
+            unsigned int ya = global_y * GROUP_TILE_SIZE + j;
+            storage_a[local_y * GROUP_TILE_SIZE + j][local_x] = as[ya * K + xa];
         }
 
         for (unsigned  int j = 0; j < GROUP_TILE_SIZE; j++) {
-            unsigned int xb = global_x * GROUP_TILE_SIZE + j;
-            unsigned int yb = i + local_y;
-            storage_b[local_y][(local_y + local_x * GROUP_TILE_SIZE + j) & GROUP_DIV] = bs[yb * N + xb];
+            unsigned int xb = global_x;
+            unsigned int yb = i + local_y * GROUP_TILE_SIZE + j;
+            storage_b[local_y * GROUP_TILE_SIZE + j][local_x] = bs[yb * N + xb];
         }
 
         barrier(CLK_LOCAL_MEM_FENCE);
 
         for (unsigned int j = 0; j < GROUP_SIDE_SIZE; j++) {
-            unsigned int ind = (j + local_y) & GROUP_DIV;
-            float c = storage_a[local_y][ind];
+            float c = storage_b[j][local_x];
             for (unsigned int k = 0; k < GROUP_TILE_SIZE; k++) {
-                res[k] += c * storage_b[ind][(ind + local_x * GROUP_TILE_SIZE + k) & GROUP_DIV];
+                res[k] += c * storage_a[local_y * GROUP_TILE_SIZE + k][j];
             }
         }
 
@@ -48,6 +46,6 @@ __kernel void matrix_multiplication_fma(__global const float *as, __global const
     }
 
     for (unsigned int j = 0; j < GROUP_TILE_SIZE; j++) {
-        cs[global_y * N + global_x * GROUP_TILE_SIZE + j] = res[j];
+        cs[(global_y * GROUP_TILE_SIZE + j) * N + global_x] = res[j];
     }
 }
