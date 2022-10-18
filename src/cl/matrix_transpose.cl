@@ -54,16 +54,20 @@ __kernel void matrix_transpose_skewed(__global const float* src, // rows x cols
                                       __global       float* dst, // cols x rows
                                       unsigned int rows, unsigned int cols)
 {
-  __local float chunk[SKEWED_CHUNK_HEIGHT][SKEWED_CHUNK_WIDTH + SKEWED_CHUNK_HEIGHT - 1];
+  __local float chunk[SKEWED_CHUNK_HEIGHT][SKEWED_CHUNK_WIDTH];
   /*
    src:
-   a b c
-   d e f
+   a b c d
+   e f g h
 
    local:
-   a d . .
-   . b e .
-   . . c f
+   a e . . .
+   . b f . .
+   . . c g .
+   . . . d h
+
+   так и при записи (a b c d),(e g f h) в local,
+   и при чтении из него (a e),(b f),(c g),(d h) не будет bank конфликтов
    */
 
   int col_src = get_global_id(0);
