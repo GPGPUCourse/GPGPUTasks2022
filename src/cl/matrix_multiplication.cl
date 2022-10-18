@@ -4,21 +4,21 @@
 
 #line 6
 
-#define TILE_SIZE_1 16
+#define TILE_SIZE 16
 
 __kernel void matrix_multiplication_1(__global float *a, __global float *b, __global float *c, int M, int K, int N){
-    int i = get_global_id(0);
-    int j = get_global_id(1);
-    __local float local_a[TILE_SIZE_1][TILE_SIZE_1];
-    __local float local_b[TILE_SIZE_1][TILE_SIZE_1];
+    __local float local_a[TILE_SIZE][TILE_SIZE];
+    __local float local_b[TILE_SIZE][TILE_SIZE];
     int local_i = get_local_id(0);
     int local_j = get_local_id(1);
+    int i = get_global_id(0);
+    int j = get_global_id(1);
     float sum = 0.0f;
-    for (int tileK = 0; tileK * TILE_SIZE_1 < K; ++tileK) {
-        local_a[local_j][local_i] = a[j * K + tileK * TILE_SIZE_1 + local_i];
-        local_b[local_j][local_i] = b[(tileK * TILE_SIZE_1 + local_j) * N + i];
+    for (int tileK = 0; tileK * TILE_SIZE < K; ++tileK) {
+        local_a[local_j][local_i] = a[j * K + tileK * TILE_SIZE + local_i];
+        local_b[local_j][local_i] = b[(tileK * TILE_SIZE + local_j) * N + i];
         barrier(CLK_LOCAL_MEM_FENCE);
-        for (int k = 0; k < TILE_SIZE_1; ++k) {
+        for (int k = 0; k < TILE_SIZE; ++k) {
             sum += local_a[local_j][k] * local_b[k][local_i];
         }
         barrier(CLK_LOCAL_MEM_FENCE);
@@ -30,7 +30,7 @@ __kernel void matrix_multiplication_1(__global float *a, __global float *b, __gl
 #define WPT 8
 #define RTS TILE_SIZE_2/WPT
 
-__kernel void matrix_multiplication(__global float *a, __global float *b, __global float *c, int M, int K, int N){
+__kernel void matrix_multiplication_2(__global float *a, __global float *b, __global float *c, int M, int K, int N){
     __local float local_a[TILE_SIZE_2][TILE_SIZE_2];
     __local float local_b[TILE_SIZE_2][TILE_SIZE_2];
     int local_i = get_local_id(0);

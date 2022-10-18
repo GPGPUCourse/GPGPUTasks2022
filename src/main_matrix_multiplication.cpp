@@ -67,20 +67,19 @@ int main(int argc, char **argv)
     bs_gpu.writeN(bs.data(), K*N);
 
     // Проверка простого перемножения матриц
-    ocl::Kernel matrix_multiplication_kernel(matrix_multiplication, matrix_multiplication_length, "matrix_multiplication");
-    matrix_multiplication_kernel.compile();
+    ocl::Kernel matrix_multiplication_lernel_1(matrix_multiplication, matrix_multiplication_length, "matrix_multiplication_1");
+    matrix_multiplication_lernel_1.compile();
 
     {
-        std::cout << "matrix_multiplication_2:" << std::endl;
         timer t;
         for (int iter = 0; iter < benchmarkingIters; ++iter) {
-            unsigned int work_group_size = 32;
-            matrix_multiplication_kernel.exec(gpu::WorkSize(work_group_size, work_group_size/8, M, N/8), as_gpu, bs_gpu, cs_gpu, M, K, N);
+            unsigned int work_group_size = 16;
+            matrix_multiplication_lernel_1.exec(gpu::WorkSize(work_group_size, work_group_size, M, N), as_gpu, bs_gpu, cs_gpu, M, K, N);
 
             t.nextLap();
         }
-        std::cout << "GPU: " << t.lapAvg() << "+-" << t.lapStd() << " s" << std::endl;
-        std::cout << "GPU: " << gflops / t.lapAvg() << " GFlops" << std::endl;
+        std::cout << "matrix_multiplication_1: " << t.lapAvg() << "+-" << t.lapStd() << " s" << std::endl;
+        std::cout << "matrix_multiplication_1: " << gflops / t.lapAvg() << " GFlops" << std::endl;
     }
 
     cs_gpu.readN(cs.data(), M*N);
@@ -97,6 +96,43 @@ int main(int argc, char **argv)
     }
 
     double diff_avg = diff_sum / (M * N);
+    std::cout << "Average difference: " << diff_avg * 100.0 << "%" << std::endl;
+    if (diff_avg > 0.01) {
+        std::cerr << "Too big difference!" << std::endl;
+        return 1;
+    }
+
+
+    // Проверка модификации перемножения матриц
+    ocl::Kernel matrix_multiplication_kernel_2(matrix_multiplication, matrix_multiplication_length, "matrix_multiplication_2");
+    matrix_multiplication_kernel_2.compile();
+
+    {
+        timer t;
+        for (int iter = 0; iter < benchmarkingIters; ++iter) {
+            unsigned int work_group_size = 32;
+            matrix_multiplication_kernel_2.exec(gpu::WorkSize(work_group_size, work_group_size/8, M, N/8), as_gpu, bs_gpu, cs_gpu, M, K, N);
+
+            t.nextLap();
+        }
+        std::cout << "matrix_multiplication_2: " << t.lapAvg() << "+-" << t.lapStd() << " s" << std::endl;
+        std::cout << "matrix_multiplication_2: " << gflops / t.lapAvg() << " GFlops" << std::endl;
+    }
+
+    cs_gpu.readN(cs.data(), M*N);
+
+    // Проверяем корректность результатов
+    diff_sum = 0;
+    for (int i = 0; i < M * N; ++i) {
+        double a = cs[i];
+        double b = cs_cpu_reference[i];
+        if (a != 0.0 && b != 0.0) {
+            double diff = fabs(a - b) / std::max(fabs(a), fabs(b));
+            diff_sum += diff;
+        }
+    }
+
+    diff_avg = diff_sum / (M * N);
     std::cout << "Average difference: " << diff_avg * 100.0 << "%" << std::endl;
     if (diff_avg > 0.01) {
         std::cerr << "Too big difference!" << std::endl;
