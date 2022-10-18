@@ -11,8 +11,8 @@ __kernel void matrix_multiplication_chunked(__global const int* A,
 
   int col_local = get_local_id(0);
   int row_local = get_local_id(1);
-  int col = get_group_id(0) * CHUNK_SIZE + col_local;
-  int row = get_group_id(1) * CHUNK_SIZE + row_local;
+  int col = get_global_id(0);
+  int row = get_global_id(1);
 
   int result = 0;
   for (int k_base = 0; k_base < K; k_base += CHUNK_SIZE) {
@@ -63,7 +63,7 @@ __kernel void matrix_multiplication_multijob(__global const int* A,
   int col_local_block = get_local_id(0) * WORK_PER_THREAD;
   int row_local = get_local_id(1);
   int col_block = get_group_id(0) * CHUNK_SIZE + col_local_block;
-  int row = get_group_id(1) * CHUNK_SIZE + row_local;
+  int row = get_global_id(1);
 
   int result[WORK_PER_THREAD];
   for (int col_wpt = 0; col_wpt < WORK_PER_THREAD; ++col_wpt) {
