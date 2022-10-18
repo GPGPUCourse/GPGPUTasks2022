@@ -56,10 +56,10 @@ int run_kernel(std::string kernel_name,
   as_t_gpu.readN(as_t.data(), M*K);
 
   // Проверяем корректность результатов
-  for (int j = 0; j < M; ++j) {
-    for (int i = 0; i < K; ++i) {
-      float a = as[j * K + i];
-      float b = as_t[i * M + j];
+  for (int row = 0; row < M; ++row) {
+    for (int col = 0; col < K; ++col) {
+      float a = as[row * K + col];
+      float b = as_t[col * M + row];
       if (a != b) {
         std::cerr << "Not the same! " << std::endl;
         return 1;

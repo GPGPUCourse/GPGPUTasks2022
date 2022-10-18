@@ -68,15 +68,15 @@ int run_kernel(std::string kernel_name,
   {
     // Проверяем корректность результатов
     double diff_sum = 0;
-    for (int i = 0; i < M; ++i) {
-      for (int j = 0; j < N; ++j) {
-        double a = cs[i * N + j];
-        double b = cs_cpu_reference[i * N + j];
+    for (int row = 0; row < M; ++row) {
+      for (int col = 0; col < N; ++col) {
+        double a = cs[row * N + col];
+        double b = cs_cpu_reference[row * N + col];
         if (std::max(fabs(a), fabs(b)) != 0) {
           double diff = fabs(a - b) / std::max(fabs(a), fabs(b));
           diff_sum += diff;
           if (diff > 0.01) {
-            std::cerr << "Too big difference (" << diff << ")! (i=" << i << ", j=" << j << ")" << std::endl;
+            std::cerr << "Too big difference (" << diff << ")! (row=" << row << ", col=" << col << ")" << std::endl;
             return 1;
           }
         }
@@ -118,13 +118,13 @@ int main(int argc, char **argv)
     {
         timer t;
         for (int iter = 0; iter < benchmarkingIters; ++iter) {
-            for (int j = 0; j < M; ++j) {
-                for (int i = 0; i < N; ++i) {
+            for (int row = 0; row < M; ++row) {
+                for (int col = 0; col < N; ++col) {
                     float sum = 0.0f;
                     for (int k = 0; k < K; ++k) {
-                        sum += as.data()[j * K + k] * bs.data()[k * N + i];
+                        sum += as.data()[row * K + k] * bs.data()[k * N + col];
                     }
-                    cs.data()[j * N + i] = sum;
+                    cs.data()[row * N + col] = sum;
                 }
             }
             t.nextLap();

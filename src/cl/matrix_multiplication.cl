@@ -9,27 +9,27 @@ __kernel void matrix_multiplication_chunked(__global const int* A,
   __local int A_local[CHUNK_SIZE][CHUNK_SIZE];
   __local int B_local[CHUNK_SIZE][CHUNK_SIZE];
 
-  int j_local = get_local_id(0);
-  int i_local = get_local_id(1);
-  int j = get_group_id(0) * CHUNK_SIZE + j_local;
-  int i = get_group_id(1) * CHUNK_SIZE + i_local;
+  int col_local = get_local_id(0);
+  int row_local = get_local_id(1);
+  int col = get_group_id(0) * CHUNK_SIZE + col_local;
+  int row = get_group_id(1) * CHUNK_SIZE + row_local;
 
   int result = 0;
   for (int k_base = 0; k_base < K; k_base += CHUNK_SIZE) {
-    int a_j = k_base + j_local;
-    int b_i = k_base + i_local;
-    A_local[i_local][j_local] = (i < M && a_j < K) ? A[i * K + a_j] : 0;
-    B_local[i_local][j_local] = (j < N && b_i < K) ? B[b_i * N + j] : 0;
+    int a_col = k_base + col_local;
+    int b_row = k_base + row_local;
+    A_local[row_local][col_local] = (row < M && a_col < K) ? A[row * K + a_col] : 0;
+    B_local[row_local][col_local] = (col < N && b_row < K) ? B[b_row * N + col] : 0;
     barrier(CLK_LOCAL_MEM_FENCE);
 
     for (int k_local = 0; k_local < CHUNK_SIZE; ++k_local) {
-      result += A_local[i_local][k_local] * B_local[k_local][j_local];
+      result += A_local[row_local][k_local] * B_local[k_local][col_local];
     }
     barrier(CLK_LOCAL_MEM_FENCE);
   }
 
-  if (i < M && j < N) {
-    C[i * N + j] = result;
+  if (row < M && col < N) {
+    C[row * N + col] = result;
   }
 }
 
@@ -60,44 +60,44 @@ __kernel void matrix_multiplication_multijob(__global const int* A,
   __local int A_local[CHUNK_SIZE][CHUNK_SIZE];
   __local int B_local[CHUNK_SIZE][CHUNK_SIZE];
 
-  int j_local_block = get_local_id(0) * WORK_PER_THREAD;
-  int i_local = get_local_id(1);
-  int j_block = get_group_id(0) * CHUNK_SIZE + j_local_block;
-  int i = get_group_id(1) * CHUNK_SIZE + i_local;
+  int col_local_block = get_local_id(0) * WORK_PER_THREAD;
+  int row_local = get_local_id(1);
+  int col_block = get_group_id(0) * CHUNK_SIZE + col_local_block;
+  int row = get_group_id(1) * CHUNK_SIZE + row_local;
 
   int result[WORK_PER_THREAD];
-  for (int j_wpt = 0; j_wpt < WORK_PER_THREAD; ++j_wpt) {
-    result[j_wpt] = 0;
+  for (int col_wpt = 0; col_wpt < WORK_PER_THREAD; ++col_wpt) {
+    result[col_wpt] = 0;
   }
 
   for (int k_base = 0; k_base < K; k_base += CHUNK_SIZE) {
-    for (int j_wpt = 0, j_local = j_local_block, j = j_block;
-         j_wpt < WORK_PER_THREAD;
-         ++j_wpt, ++j_local, ++j) {
-      int a_j = k_base + j_local;
-      int b_i = k_base + i_local;
-      A_local[i_local][j_local] = (i < M && a_j < K) ? A[i * K + a_j] : 0;
-      B_local[i_local][j_local] = (j < N && b_i < K) ? B[b_i * N + j] : 0;
+    for (int col_wpt = 0, col_local = col_local_block, col = col_block;
+         col_wpt < WORK_PER_THREAD;
+         ++col_wpt, ++col_local, ++col) {
+      int a_col = k_base + col_local;
+      int b_row = k_base + row_local;
+      A_local[row_local][col_local] = (row < M && a_col < K) ? A[row * K + a_col] : 0;
+      B_local[row_local][col_local] = (col < N && b_row < K) ? B[b_row * N + col] : 0;
     }
     barrier(CLK_LOCAL_MEM_FENCE);
 
     for (int k_local = 0; k_local < CHUNK_SIZE; ++k_local) {
-      int a = A_local[i_local][k_local];
-      for (int j_wpt = 0, j_local = j_local_block, j = j_block;
-           j_wpt < WORK_PER_THREAD;
-           ++j_wpt, ++j_local, ++j) {
-        result[j_wpt] += a * B_local[k_local][j_local];
+      int a = A_local[row_local][k_local];
+      for (int col_wpt = 0, col_local = col_local_block, col = col_block;
+           col_wpt < WORK_PER_THREAD;
+           ++col_wpt, ++col_local, ++col) {
+        result[col_wpt] += a * B_local[k_local][col_local];
       }
     }
     barrier(CLK_LOCAL_MEM_FENCE);
   }
 
-  for (int j_wpt = 0, j = j_block;
-       j_wpt < WORK_PER_THREAD;
-       ++j_wpt, ++j)
+  for (int col_wpt = 0, col = col_block;
+       col_wpt < WORK_PER_THREAD;
+       ++col_wpt, ++col)
   {
-    if (i < M && j < N) {
-      C[i * N + j] = result[j_wpt];
+    if (row < M && col < N) {
+      C[row * N + col] = result[col_wpt];
     }
   }
 }
