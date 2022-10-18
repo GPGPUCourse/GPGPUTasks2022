@@ -30,7 +30,7 @@ Num round_up(Num num, Num denom) {
 int run_kernel(std::string kernel_name,
                std::vector<int>& as, std::vector<int>& bs, std::vector<int>& cs,
                const std::vector<int>& cs_cpu_reference,
-               unsigned int x_items_per_thread)
+               unsigned int y_items_per_thread)
 {
   gpu::gpu_mem_32i as_gpu, bs_gpu, cs_gpu;
   as_gpu.resizeN(M * K);
@@ -48,10 +48,10 @@ int run_kernel(std::string kernel_name,
   {
     timer t;
     for (int iter = 0; iter < benchmarkingIters; ++iter) {
-      unsigned int work_group_size_x = 16 / x_items_per_thread;
-      unsigned int work_group_size_y = 16;
-      unsigned int global_work_size_x = round_up(div_up(M, x_items_per_thread), work_group_size_x);
-      unsigned int global_work_size_y = round_up(N, work_group_size_y);
+      unsigned int work_group_size_x = 16;
+      unsigned int work_group_size_y = 16 / y_items_per_thread;
+      unsigned int global_work_size_x = round_up(M, work_group_size_x);
+      unsigned int global_work_size_y = round_up(div_up(N, y_items_per_thread), work_group_size_y);
       matrix_multiplication_kernel.exec(
           gpu::WorkSize(work_group_size_x, work_group_size_y, global_work_size_x, global_work_size_y),
           as_gpu, bs_gpu, cs_gpu, M, K, N);
