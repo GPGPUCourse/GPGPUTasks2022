@@ -19,7 +19,7 @@ int main(int argc, char **argv)
     context.init(device.device_id_opencl);
     context.activate();
 
-    int benchmarkingIters = 10; // пока тестируетесь удобно выставить единицу
+    int benchmarkingIters = 1; // пока тестируетесь удобно выставить единицу
     unsigned int M = 1024;
     unsigned int K = 1024;
     unsigned int N = 1024;
@@ -77,8 +77,8 @@ int main(int argc, char **argv)
             unsigned int global_work_size = 16;
             matrix_multiplication_kernel.exec(gpu::WorkSize(work_group_size,
                                                             global_work_size,
-                                                            M,
-                                                            K
+                                                            N,
+                                                            M
                                                             ),
                                               as_gpu,
                                               bs_gpu,
@@ -113,6 +113,56 @@ int main(int argc, char **argv)
     if (diff_avg > 0.01) {
         std::cerr << "Too big difference!" << std::endl;
         return 1;
+    }
+
+    ocl::Kernel matrix_multiplication_fma_kernel(matrix_multiplication, matrix_multiplication_length, "matrix_multiplication_fma");
+    matrix_multiplication_kernel.compile();
+
+    {
+      timer t;
+      for (int iter = 0; iter < benchmarkingIters; ++iter) {
+        unsigned int work_group_size = 32;
+        unsigned int tile = work_group_size >> 2;
+        unsigned int global_work_size = work_group_size / tile;
+        matrix_multiplication_fma_kernel.exec(gpu::WorkSize(work_group_size,
+                                                        global_work_size,
+                                                        N,
+                                                        M / tile
+                                                        ),
+                                          as_gpu,
+                                          bs_gpu,
+                                          cs_gpu,
+                                          M,
+                                          K,
+                                          N
+        );
+
+        t.nextLap();
+      }
+      std::cout << "Mult with FMA:" << std::endl;
+      std::cout << "GPU: " << t.lapAvg() << "+-" << t.lapStd() << " s" << std::endl;
+      std::cout << "GPU: " << gflops / t.lapAvg() << " GFlops" << std::endl;
+    }
+
+    cs_gpu.readN(cs.data(), M*N);
+
+
+    // Проверяем корректность результатов
+    diff_sum = 0;
+    for (int i = 0; i < M * N; ++i) {
+      double a = cs[i];
+      double b = cs_cpu_reference[i];
+      if (a != 0.0 && b != 0.0) {
+        double diff = fabs(a - b) / std::max(fabs(a), fabs(b));
+        diff_sum += diff;
+      }
+    }
+
+    diff_avg = diff_sum / (M * N);
+    std::cout << "Average difference: " << diff_avg * 100.0 << "%" << std::endl;
+    if (diff_avg > 0.01) {
+      std::cerr << "Too big difference!" << std::endl;
+      return 1;
     }
 
     return 0;

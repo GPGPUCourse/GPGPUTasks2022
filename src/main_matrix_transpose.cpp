@@ -55,8 +55,8 @@ int main(int argc, char **argv)
             matrix_transpose_kernel.exec(gpu::WorkSize(
                                              work_group_size,
                                              global_work_size,
-                                             M,
-                                             K
+                                             K,
+                                             M
                                              ),
                                          as_gpu,
                                          as_t_gpu,
