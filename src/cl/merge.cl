@@ -1,8 +1,6 @@
-#define WORK_GROUP_SIZE (4 /*128*/)
+#define WORK_GROUP_SIZE 128
 #define LOCALLY_SORTABLE_SIZE_3
 // #define LOCALLY_SORTABLE_SIZE 3
-// #define WORK_PER_THREAD (2 * LOCALLY_SORTABLE_SIZE) == 6
-#define LOCAL_SIZE ((LOCALLY_SORTABLE_SIZE * 2) * WORK_GROUP_SIZE)
 
 #define CAT(X,Y) X##_##Y   //concatenate words
 
@@ -138,6 +136,9 @@ void merge_small_unknown(__local float* a_ptr) {
 }
 #endif
 
+// #define WORK_PER_THREAD (2 * LOCALLY_SORTABLE_SIZE) == 6
+#define LOCAL_SIZE ((LOCALLY_SORTABLE_SIZE * 2) * WORK_GROUP_SIZE)
+
 void swap_local(__local float* a, __local float* b) {
   float tmp = *a;
   *a = *b;
@@ -204,7 +205,6 @@ void load(__global float* a, __local float* local_a, unsigned int n,
 void download(__global float* a, __local float* local_a, unsigned int n,
               unsigned int global_id, unsigned int group_id, unsigned int local_id) {
 
-  barrier(CLK_GLOBAL_MEM_FENCE);
   load(a, local_a, n, global_id, group_id, local_id, true);
   barrier(CLK_LOCAL_MEM_FENCE);
 }
@@ -213,13 +213,105 @@ void upload(__global float* a, __local float* local_a, unsigned int n,
                   unsigned int global_id, unsigned int group_id, unsigned int local_id) {
   barrier(CLK_LOCAL_MEM_FENCE);
   load(a, local_a, n, global_id, group_id, local_id, false);
-  barrier(CLK_GLOBAL_MEM_FENCE);
 }
 
-__kernel void merge_sort(__global float* a,
+__kernel void merge_path_global(__global float* a,
+                                unsigned int n, unsigned int merged_src_len)
+{
+  int debug_flag = false;
+
+  __local float local_a[LOCAL_SIZE];
+
+  unsigned int local_id = get_local_id(0);
+  unsigned int global_id = get_global_id(0);
+  unsigned int group_id = get_group_id(0);
+
+  if (global_id == 0) {
+    if (debug_flag) {
+      printf("Global, merged_src_len=%u\n", merged_src_len);
+    }
+    for (unsigned int offset = 0; offset < n; offset += merged_src_len * 2) {
+      __global float *first = a + offset;
+      unsigned int len_1 = min(merged_src_len, n - offset);
+
+      __global float *second = first + len_1;
+      unsigned int len_2 = min(merged_src_len, n - offset - len_1);
+
+      if (debug_flag) {
+        printf("offset=%u, len_1=%u, len_2=%u\n", offset, len_1, len_2);
+      }
+
+      while (len_1 > 0 && len_2 > 0) {
+        unsigned int diag = min(LOCALLY_SORTABLE_SIZE * 2u, len_1 + len_2);
+
+        unsigned int len_1_1;
+        unsigned int len_1_2;
+        unsigned int len_2_1;
+        unsigned int len_2_2;
+
+        unsigned int l = len_2 < diag ? diag - len_2 : 0;
+        unsigned int r = min(diag, len_1);
+
+        if (l == len_1 || first[l] > second[diag - l - 1]) {
+          len_1_1 = l;
+        } else {
+          while (l + 1 < r) {
+            unsigned int mid = (l + r) / 2;
+            if (first[mid] <= second[diag - mid - 1]) {
+              l = mid;
+            } else {
+              r = mid;
+            }
+          }
+          len_1_1 = r;
+        }
+
+        len_2_1 = diag - len_1_1;
+        len_1_2 = len_1 - len_1_1;
+        len_2_2 = len_2 - len_2_1;
+
+        if (len_1_2 > 0 && len_2_1 > 0) {
+          swap_global_arrays(first + len_1_1, len_1_2, len_2_1);
+          // было  len_1_1 len_1_2 len_2_1 len_2_2
+          // стало len_1_1 len_2_1 len_1_2 len_2_2
+        }
+
+        if (len_1 < len_1_1) {
+          len_1 = 0;
+        } else {
+          first += diag;
+          len_1 -= len_1_1;
+        }
+
+        if (len_2 < len_2_1) {
+          len_2 = 0;
+        } else {
+          second += len_2_1;
+          len_2 -= len_2_1;
+        }
+      } // end while
+    } // end for
+  } // end if global_id == 0
+}
+
+__kernel void merge_global(__global float* a,
                          unsigned int n)
 {
-  int debug_flag = true;
+  __local float local_a[LOCAL_SIZE];
+
+  unsigned int local_id = get_local_id(0);
+  unsigned int global_id = get_global_id(0);
+  unsigned int group_id = get_group_id(0);
+
+  download(a, local_a, n, global_id, group_id, local_id);
+  merge_small_unknown(local_a + local_id * (LOCALLY_SORTABLE_SIZE * 2));
+  upload(a, local_a, n, global_id, group_id, local_id);
+}
+
+__kernel void merge_local(__global float* a,
+                         unsigned int n)
+{
+  int debug_flag = false;
 
   __local float local_a[LOCAL_SIZE];
 
@@ -236,207 +328,189 @@ __kernel void merge_sort(__global float* a,
     }
     printf("\n\n");
   }
-
+  barrier(CLK_LOCAL_MEM_FENCE);
 
   sort_small(local_a + local_id * (LOCALLY_SORTABLE_SIZE * 2));
   sort_small(local_a + local_id * (LOCALLY_SORTABLE_SIZE * 2) + LOCALLY_SORTABLE_SIZE);
 
   barrier(CLK_LOCAL_MEM_FENCE);
 
-  if (debug_flag && global_id == 0) {
-    printf("Sorted 0 \n");
-    for (unsigned int i = 0; i < 24; ++i) {
-      printf("%.0f ", local_a[i]);
-    }
-    printf("\n\n");
-  }
-
-  // теперь каждый поток будет мержить по два отрезка длиной LOCALLY_SORTABLE_SIZE
-  __local unsigned int first_arr_lengths[WORK_GROUP_SIZE];
-//  for (unsigned int i = 0; i < WORK_GROUP_SIZE; ++i) {
-//    first_arr_lengths[i] = 0;
+//  if (debug_flag && global_id == 0) {
+//    printf("Sorted 0 \n");
+//    for (unsigned int i = 0; i < 24; ++i) {
+//      printf("%.0f ", local_a[i]);
+//    }
+//    printf("\n\n");
+//  }
+//  barrier(CLK_LOCAL_MEM_FENCE);
+//
+//  // теперь каждый поток будет мержить по два отрезка длиной LOCALLY_SORTABLE_SIZE
+//  __local unsigned int first_arr_lengths[WORK_GROUP_SIZE];
+//
+//  for (unsigned int scale_factor = 0, merged_src_len = LOCALLY_SORTABLE_SIZE;
+//       merged_src_len < LOCAL_SIZE;
+//       ++scale_factor, merged_src_len *= 2)
+//  {
+//    first_arr_lengths[local_id] = merged_src_len; // todo move down
+//    barrier(CLK_LOCAL_MEM_FENCE);
+//
+//    for (unsigned int factor_i = scale_factor, merged_len = merged_src_len * 2;
+//        factor_i > 0;
+//         --factor_i, merged_len /= 2)
+//    {
+//      if (debug_flag && global_id == 0) {
+//        printf("Inner cycle. scale=%u, factor=%u, merged_src_len=%u\n",
+//               scale_factor, factor_i, merged_src_len);
+//        //        for (unsigned int i = 0; i < 12; ++i) {
+//        //          printf("%.0f ", local_a[i]);
+//        //        }
+//        //        printf("\n\n");
+//      }
+//
+//      if (local_id % (1 << factor_i) == 0) {
+//        unsigned int diag = merged_src_len;
+//
+//        unsigned int len_1 = first_arr_lengths[local_id];
+//        __local float *first = local_a;
+//
+//        unsigned int len_2 = merged_len - len_1;
+//        __local float *second = first + len_1;
+//
+////        if (debug_flag) {
+////          printf("len_1=%u, len_2=%u\n", len_1, len_2);
+////        }
+//
+//        unsigned int len_1_1;
+//        unsigned int len_1_2;
+//        unsigned int len_2_1;
+//        unsigned int len_2_2;
+//
+//        unsigned int l = len_2 < diag ? diag - len_2 : 0;
+//        unsigned int r = min(diag, len_1);
+//
+//        if (len_1 == 0 || (len_2 != 0 && first[0] > second[len_2 - 1])) {
+//          len_1_1 = 0;
+//        } else if (len_2 == 0 ||
+//                   (len_1 != 0 && first[len_1 - 1] <= second[0])) {
+//          len_1_1 = len_1;
+//        } else if (l == len_1 || first[l] > second[diag - l - 1]) {
+//          len_1_1 = l;
+//        } else {
+//          while (l + 1 < r) {
+//            unsigned int mid = (l + r) / 2;
+//            if (first[mid] <= second[diag - mid - 1]) {
+//              l = mid;
+//            } else {
+//              r = mid;
+//            }
+//          }
+//          len_1_1 = r;
+//        }
+//
+//        len_1_2 = len_1 - len_1_1;
+//        len_2_1 = diag - len_1_1;
+//        len_2_2 = len_2 - len_2_1;
+//
+//        if (len_1_2 > 0 && len_2_1 > 0) {
+//          swap_local_arrays(first + len_1_1, len_1_2, len_2_1);
+//          // было  len_1_1 len_1_2 len_2_1 len_2_2
+//          // стало len_1_1 len_2_1 len_1_2 len_2_2
+//        }
+//
+//        first += diag;
+//        len_1 -= len_1_1;
+//
+//        second += len_2_1;
+//        len_2 -= len_2_1;
+//
+//        first_arr_lengths[local_id] = len_1_1;
+//        first_arr_lengths[local_id + (1 << factor_i) / 2] = len_1_2;
+//        barrier(CLK_LOCAL_MEM_FENCE);
+//
+//
+////        unsigned int len_1 = first_arr_lengths[local_id];
+////        unsigned int len_2 = merged_len - len_1;
+////        unsigned int diag = merged_len / 2;
+////
+////        __local float *first = local_a + (local_id / (1 << factor_i)) * merged_len;
+////        __local float *second = first + len_1;
+////
+////        unsigned int len_1_1;
+////        unsigned int len_1_2;
+////        unsigned int len_2_1;
+////        unsigned int len_2_2;
+////
+////        if (len_1 == 0 || (len_2 != 0 && first[0] > second[len_2 - 1])) {
+////          len_1_1 = 0;
+////        } else if (len_2 == 0 ||
+////                   (len_1 != 0 && first[len_1 - 1] <= second[0])) {
+////          len_1_1 = len_1;
+////        } else {
+////          unsigned int l = len_2 < diag ? diag - len_2 : 0;
+////          unsigned int r = min(diag, len_1);
+////
+////          while (l + 1 < r) {
+////            unsigned int mid = (l + r) / 2;
+////            if (first[mid] <= second[diag - 1 - mid]) {
+////              l = mid;
+////            } else {
+////              r = mid;
+////            }
+////          }
+////
+////          len_1_1 = r;
+////        }
+//////        len_1_2 = len_1 - len_1_1;
+//////        len_2_1 = diag - len_1_1;
+//////        len_2_2 = len_2 - len_2_1;
+//////
+//////        swap_local_arrays(first + len_1_1, len_1_2, len_2_1);
+//////        // было  len_1_1 len_1_2 len_2_1 len_2_2
+//////        // стало len_1_1 len_2_1 len_1_2 len_2_2
+////
+////        first_arr_lengths[local_id] = len_1_1;
+////        first_arr_lengths[local_id + (1 << factor_i) / 2] = len_1_2;
+//      }
+//      barrier(CLK_LOCAL_MEM_FENCE);
+//
+//      if (debug_flag && global_id == 0) {
+//        printf("After binsearch\n");
+//        for (unsigned int i = 0; i < 4; ++i) {
+//          printf("%u ", first_arr_lengths[i]);
+//        }
+//        printf("\n");
+//        for (unsigned int i = 0; i < 24; ++i) {
+//          printf("%.0f ", local_a[i]);
+//        }
+//        printf("\n\n");
+//      }
+//    }
+//
+    barrier(CLK_LOCAL_MEM_FENCE);
+    merge_small_unknown(local_a + local_id * (LOCALLY_SORTABLE_SIZE * 2)/*,
+                first_arr_lengths[local_id]*/);
+    barrier(CLK_LOCAL_MEM_FENCE);
+//
+//    if (debug_flag && global_id == 0) {
+//      printf("After merge\n");
+//      for (unsigned int i = 0; i < 24; ++i) {
+//        printf("%.0f ", local_a[i]);
+//      }
+//      printf("\n");
+//
+//      int ok_flag = true;
+//      for (int i = 0; i < LOCAL_SIZE; i += merged_src_len * 2) {
+//        for (int j = 0; j < merged_src_len * 2 - 1 && j < (LOCAL_SIZE - i - 1); ++j) {
+//          ok_flag &= (local_a[j] <= local_a[j + 1]);
+//        }
+//      }
+//      if (!ok_flag) {
+//        printf("bad merge\n");
+//      }
+//      printf("\n");
+//    }
+//    barrier(CLK_LOCAL_MEM_FENCE);
 //  }
 
-  for (unsigned int scale_factor = 0, merged_src_len = LOCALLY_SORTABLE_SIZE;
-       merged_src_len < n;
-       ++scale_factor, merged_src_len *= 2)
-  {
-    first_arr_lengths[local_id] = merged_src_len; // todo move down
-    barrier(CLK_LOCAL_MEM_FENCE);
-
-    if (merged_src_len >= LOCALLY_SORTABLE_SIZE * 2 /*LOCAL_SIZE*/) { // fixme
-      // по-хорошему надо что-то вроде first_arr_lengths, но глобальное;
-      // правда я без понятия как обмениваться данными между неизвестным заранее количеством воркгрупп
-
-      upload(a, local_a, n, global_id, group_id, local_id);
-
-      if (global_id == 0) {
-        if (debug_flag) {
-          printf("Global, merged_src_len=%u\n", merged_src_len);
-        }
-        for (unsigned int offset = 0; offset < n; offset += merged_src_len * 2) {
-          __global float *first = a + offset;
-          unsigned int len_1 = min(merged_src_len, n - offset);
-
-          __global float *second = first + len_1;
-          unsigned int len_2 = min(merged_src_len, n - offset - len_1);
-
-          if (debug_flag) {
-            printf("offset=%u, len_1=%u, len_2=%u\n", offset, len_1, len_2);
-          }
-
-          while (len_1 > 0 && len_2 > 0) {
-            unsigned int diag = min(LOCALLY_SORTABLE_SIZE * 2u, len_1 + len_2);
-
-            unsigned int len_1_1;
-            unsigned int len_1_2;
-            unsigned int len_2_1;
-            unsigned int len_2_2;
-
-            unsigned int l = len_2 < diag ? diag - len_2 : 0;
-            unsigned int r = min(diag, len_1);
-
-            if (l == len_1 || first[l] > second[diag - l - 1]) {
-              len_1_1 = l;
-            } else {
-              while (l + 1 < r) {
-                unsigned int mid = (l + r) / 2;
-                if (first[mid] <= second[diag - mid - 1]) {
-                  l = mid;
-                } else {
-                  r = mid;
-                }
-              }
-              len_1_1 = r;
-            }
-
-            len_1_2 = len_1 - len_1_1;
-            len_2_1 = diag - len_1_1;
-            len_2_2 = len_2 - len_2_1;
-
-            if (len_1_2 > 0 && len_2_1 > 0) {
-              swap_global_arrays(first + len_1_1, len_1_2, len_2_1);
-              // было  len_1_1 len_1_2 len_2_1 len_2_2
-              // стало len_1_1 len_2_1 len_1_2 len_2_2
-            }
-
-            first += diag;
-            len_1 -= len_1_1;
-
-            second += len_2_1;
-            len_2 -= len_2_1;
-          } // end while
-        } // end for
-      } // end if global_id == 0
-
-      barrier(CLK_GLOBAL_MEM_FENCE);
-      download(a, local_a, n, global_id, group_id, local_id);
-      barrier(CLK_LOCAL_MEM_FENCE);
-    } else { // end if merged_src_len >= LOCAL_SIZE
-      for (unsigned int factor_i = scale_factor, merged_len = merged_src_len * 2;
-          factor_i > 0;
-           --factor_i, merged_len /= 2)
-      {
-        if (debug_flag && global_id == 0) {
-          printf("Inner cycle. scale=%u, factor=%u, merged_src_len=%u\n",
-                 scale_factor, factor_i, merged_src_len);
-          //        for (unsigned int i = 0; i < 12; ++i) {
-          //          printf("%.0f ", local_a[i]);
-          //        }
-          //        printf("\n\n");
-        }
-
-        if (local_id % (1 << factor_i) == 0) {
-          unsigned int len_1 = first_arr_lengths[local_id];
-          unsigned int len_2 = merged_len - len_1;
-          unsigned int diag = merged_len / 2;
-
-          __local float *first = local_a + (local_id / (1 << factor_i)) * merged_len;
-          __local float *second = first + len_1;
-
-          unsigned int len_1_1;
-          unsigned int len_1_2;
-          unsigned int len_2_1;
-          unsigned int len_2_2;
-
-          if (len_1 == 0 || (len_2 != 0 && first[0] > second[len_2 - 1])) {
-            len_1_1 = 0;
-          } else if (len_2 == 0 ||
-                     (len_1 != 0 && first[len_1 - 1] <= second[0])) {
-            len_1_1 = len_1;
-          } else {
-            unsigned int l = len_2 < diag ? diag - len_2 : 0;
-            unsigned int r = min(diag, len_1);
-
-            while (l + 1 < r) {
-              unsigned int mid = (l + r) / 2;
-              if (first[mid] <= second[diag - 1 - mid]) {
-                l = mid;
-              } else {
-                r = mid;
-              }
-            }
-
-            len_1_1 = r;
-          }
-          len_1_2 = len_1 - len_1_1;
-          len_2_1 = diag - len_1_1;
-          len_2_2 = len_2 - len_2_1;
-
-          swap_local_arrays(first + len_1_1, len_1_2, len_2_1);
-          // было  len_1_1 len_1_2 len_2_1 len_2_2
-          // стало len_1_1 len_2_1 len_1_2 len_2_2
-
-          first_arr_lengths[local_id] = len_1_1;
-          first_arr_lengths[local_id + (1 << factor_i) / 2] = len_1_2;
-        }
-        barrier(CLK_LOCAL_MEM_FENCE);
-
-        if (debug_flag && global_id == 0) {
-          printf("After binsearch\n");
-          for (unsigned int i = 0; i < 4; ++i) {
-            printf("%u ", first_arr_lengths[i]);
-          }
-          printf("\n");
-          for (unsigned int i = 0; i < 24; ++i) {
-            printf("%.0f ", local_a[i]);
-          }
-          printf("\n\n");
-        }
-      }
-    } // end if-else merged_len_src >= LOCAL_SIZE
-
-    barrier(CLK_LOCAL_MEM_FENCE);
-    if (true || first_arr_lengths[local_id] >= LOCALLY_SORTABLE_SIZE * 2) { // fixme
-      merge_small_unknown(local_a + local_id * (LOCALLY_SORTABLE_SIZE * 2));
-    } else {
-      merge_small(local_a + local_id * (LOCALLY_SORTABLE_SIZE * 2),
-                  first_arr_lengths[local_id]);
-    }
-    barrier(CLK_LOCAL_MEM_FENCE);
-
-    if (debug_flag && global_id == 0) {
-      printf("After merge\n");
-      for (unsigned int i = 0; i < 24; ++i) {
-        printf("%.0f ", local_a[i]);
-      }
-      printf("\n");
-
-      int ok_flag = true;
-      for (int i = 0; i < LOCAL_SIZE; i += merged_src_len * 2) {
-        for (int j = 0; j < merged_src_len * 2 - 1 && j < (LOCAL_SIZE - i - 1); ++j) {
-          ok_flag &= (local_a[j] <= local_a[j + 1]);
-        }
-      }
-      if (!ok_flag) {
-        printf("bad merge\n");
-      }
-      printf("\n");
-    }
-    barrier(CLK_LOCAL_MEM_FENCE);
-  }
-
-  barrier(CLK_LOCAL_MEM_FENCE);
   upload(a, local_a, n, global_id, group_id, local_id);
-  barrier(CLK_GLOBAL_MEM_FENCE);
 }
