@@ -9,7 +9,26 @@
 #include <vector>
 #include <iostream>
 #include <stdexcept>
+#include <cassert>
 
+bool check_diff(unsigned int M, unsigned int N, const std::vector<float>& expected, const std::vector<float>& actual) {
+    double diff_sum = 0;
+    for (int i = 0; i < M * N; ++i) {
+        double a = actual[i];
+        double b = expected[i];
+        if (a != 0.0 && b != 0.0) {
+            double diff = fabs(a - b) / std::max(fabs(a), fabs(b));
+            diff_sum += diff;
+        }
+    }
+    double diff_avg = diff_sum / (M * N);
+    std::cout << "Average difference: " << diff_avg * 100.0 << "%" << std::endl;
+    if (diff_avg > 0.01) {
+        std::cerr << "Too big difference!" << std::endl;
+        return false;
+    }
+    return true;
+}
 
 int main(int argc, char **argv)
 {
@@ -52,8 +71,8 @@ int main(int argc, char **argv)
             }
             t.nextLap();
         }
-        std::cout << "CPU: " << t.lapAvg() << "+-" << t.lapStd() << " s" << std::endl;
-        std::cout << "CPU: " << gflops / t.lapAvg() << " GFlops" << std::endl;
+        std::cout << "CPU:         " << t.lapAvg() << "+-" << t.lapStd() << " s" << std::endl;
+        std::cout << "CPU:         " << gflops / t.lapAvg() << " GFlops" << std::endl;
     }
 
     const std::vector<float> cs_cpu_reference = cs;
@@ -68,19 +87,18 @@ int main(int argc, char **argv)
     bs_gpu.writeN(bs.data(), K*N);
 
 
-    size_t work_group_size = 128;
-    size_t tile_size = 32;
-    std::string defines = " -D WORK_GROUP_SIZE=" + to_string(work_group_size);
-    defines += " -D TILE_SIZE=" + to_string(tile_size);
-    ocl::Kernel matrix_multiplication_local_mem_kernel(
-        matrix_multiplication,
-        matrix_multiplication_length,
-        "matrix_multiplication_local_mem",
-        defines
-    );
-    matrix_multiplication_local_mem_kernel.compile();
-
     {
+        size_t work_group_size = 128;
+        size_t tile_size = 32;
+        std::string defines = " -D WORK_GROUP_SIZE=" + to_string(work_group_size);
+        defines += " -D TILE_SIZE=" + to_string(tile_size);
+        ocl::Kernel matrix_multiplication_local_mem_kernel(
+            matrix_multiplication,
+            matrix_multiplication_length,
+            "matrix_multiplication_local_mem",
+            defines
+        );
+        matrix_multiplication_local_mem_kernel.compile();
         timer t;
         for (int iter = 0; iter < benchmarkingIters; ++iter) {
             size_t N_tiles = (N + tile_size - 1) / tile_size;
@@ -93,44 +111,55 @@ int main(int argc, char **argv)
 
             t.nextLap();
         }
-        std::cout << "GPU: " << t.lapAvg() << "+-" << t.lapStd() << " s" << std::endl;
-        std::cout << "GPU: " << gflops / t.lapAvg() << " GFlops" << std::endl;
-    }
+        std::cout << "GPU (local): " << t.lapAvg() << "+-" << t.lapStd() << " s" << std::endl;
+        std::cout << "GPU (local): " << gflops / t.lapAvg() << " GFlops" << std::endl;
 
-    cs_gpu.readN(cs.data(), M*N);
+        cs_gpu.readN(cs.data(), M*N);
 
-    // Проверяем корректность результатов
-    double diff_sum = 0;
-    for (int i = 0; i < M * N; ++i) {
-        double a = cs[i];
-        double b = cs_cpu_reference[i];
-        if (a != 0.0 && b != 0.0) {
-            double diff = fabs(a - b) / std::max(fabs(a), fabs(b));
-            diff_sum += diff;
+        // Проверяем корректность результатов
+        if (!check_diff(M, N, cs_cpu_reference, cs)) {
+            return -1;
         }
     }
 
-//    std::cout << "-----------------------\n";
-//    for (int i = 0; i < M; i++) {
-//        for (int j = 0; j < N; j++) {
-//            std::cout << cs[i * N + j] << " ";
-//        }
-//        std::cout << std::endl;
-//    }
-//    std::cout << "-----------------------\n";
-//    for (int i = 0; i < M; i++) {
-//        for (int j = 0; j < N; j++) {
-//            std::cout << cs_cpu_reference[i * N + j] << " ";
-//        }
-//        std::cout << std::endl;
-//    }
-//    std::cout << "-----------------------\n";
+    {
+        size_t work_group_size = 128;
+        size_t tile_size = 32;
+        size_t wpt = tile_size * tile_size / work_group_size;
+        size_t rts = tile_size / wpt;
+        assert(rts * tile_size == work_group_size);
 
-    double diff_avg = diff_sum / (M * N);
-    std::cout << "Average difference: " << diff_avg * 100.0 << "%" << std::endl;
-    if (diff_avg > 0.01) {
-        std::cerr << "Too big difference!" << std::endl;
-        return 1;
+        std::string defines = " -D WORK_GROUP_SIZE=" + to_string(work_group_size);
+        defines += " -D TILE_SIZE=" + to_string(tile_size);
+        ocl::Kernel matrix_multiplication_fma_kernel(
+            matrix_multiplication,
+            matrix_multiplication_length,
+            "matrix_multiplication_fma",
+            defines
+        );
+        matrix_multiplication_fma_kernel.compile();
+        timer t;
+        for (int iter = 0; iter < benchmarkingIters; ++iter) {
+            size_t N_tiles = (N + tile_size - 1) / tile_size;
+            size_t M_tiles = (M + tile_size - 1) / tile_size;
+            unsigned int global_work_size_x = N_tiles * rts;
+            unsigned int global_work_size_y = M_tiles * tile_size;
+            matrix_multiplication_fma_kernel.exec(
+                gpu::WorkSize(rts, tile_size, global_work_size_x, global_work_size_y),
+                as_gpu, bs_gpu, cs_gpu, M, K, N
+            );
+
+            t.nextLap();
+        }
+        std::cout << "GPU (fma):   " << t.lapAvg() << "+-" << t.lapStd() << " s" << std::endl;
+        std::cout << "GPU (fma):   " << gflops / t.lapAvg() << " GFlops" << std::endl;
+
+        cs_gpu.readN(cs.data(), M*N);
+
+        // Проверяем корректность результатов
+        if (!check_diff(M, N, cs_cpu_reference, cs)) {
+            return -1;
+        }
     }
 
     return 0;
