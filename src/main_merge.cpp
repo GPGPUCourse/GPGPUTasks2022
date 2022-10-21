@@ -68,31 +68,28 @@ int main(int argc, char **argv) {
         ocl::Kernel merge(merge_kernel, merge_kernel_length, "merge");
         merge.compile();
         timer t;
-        gpu::gpu_mem_32f *curr_arr, *next_arr;
         for (int iter = 0; iter < benchmarkingIters; ++iter) {
             as_gpu.writeN(as.data(), n2);
             t.restart();// Запускаем секундомер после прогрузки данных, чтобы замерять время работы кернела, а не трансфера данных
             unsigned int workGroupSize = 128;
             unsigned int global_work_size = n2;
             unsigned int lvl_size = 2;
-            curr_arr = &as_gpu;
-            next_arr = &bs_gpu;
 
             while (true) {
-                merge.exec(gpu::WorkSize(workGroupSize, global_work_size), *curr_arr, *next_arr, n2, lvl_size);
+                merge.exec(gpu::WorkSize(workGroupSize, global_work_size), as_gpu, bs_gpu, n2, lvl_size);
 
                 if (lvl_size >= n2) {
                     break;
                 }
 
-                std::swap(curr_arr, next_arr);
+                as_gpu.swap(bs_gpu);
                 lvl_size *= 2;
             }
             t.nextLap();
         }
         std::cout << "GPU: " << t.lapAvg() << "+-" << t.lapStd() << " s" << std::endl;
         std::cout << "GPU: " << (n / 1000 / 1000) / t.lapAvg() << " millions/s" << std::endl;
-        (*next_arr).readN(as.data(), n);
+        bs_gpu.readN(as.data(), n);
     }
     // Проверяем корректность результатов
     for (int i = 0; i < n; ++i) {
