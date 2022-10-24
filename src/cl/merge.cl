@@ -22,29 +22,23 @@ __kernel void merge(__global const float* a, __global float* b, const unsigned i
 
    const unsigned int b_i = a_j;
    const unsigned int b_j = min(n, b_i + group_size);
-   if (offset_index < group_size) {
-      int l = -1;
-      int r = b_j - b_i;
-      while (r - l > 1) {
-         const unsigned int m = (l + r) / 2;
+   int l = - 1;
+   int r = group_size;
+   while (r - l > 1) {
+      const unsigned int m = (l + r) / 2;
+      if (offset_index < group_size) {
          if (a[global_id] < a[offset + group_size + m]) {
             r = m;
          } else {
             l = m;
          }
-      }
-      b[offset + (offset_index % group_size) + (l + 1)] = a[global_id];
-   } else {
-      int l = -1;
-      int r = group_size;
-      while (r - l > 1) {
-         const unsigned int m = (l + r) / 2;
+      } else {
          if (a[global_id] > a[offset + m]) {
             l = m;
          } else {
             r = m;
          }
       }
-      b[offset + (offset_index % group_size) + (l + 1)] = a[global_id];
    }
+   b[offset + (offset_index % group_size) + (l + 1)] = a[global_id];
 }
