@@ -8,21 +8,27 @@ __kernel void merge(__global const float *as, __global float *res, unsigned int 
     const int left_part = part_of_array % 2 == 1 ? part_of_array - 1 : part_of_array;
     const int right_part = part_of_array % 2 == 1 ? part_of_array : part_of_array + 1;
 
-    const int start = left_part * size_of_part;
-    const int diagonal = i - start;
+    const int start_left_part = left_part * size_of_part;
+    const int start_right_part = start_left_part + size_of_part;
+    const bool row = (i - start_right_part) >= 0;
+    int l = -1, r = size_of_part;
 
-    for (int x = 0; x <= diagonal; x++) {
-        const int y = diagonal - x;
-        if (x >= size_of_part || y >= size_of_part) {
-            continue;
-        }
-        if (as[x + start] <= as[y + size_of_part + start]) {
-            res[i] = as[x + start];
-            return;
-        } else if (x == diagonal) {
-            res[i] = as[y + size_of_part + start];
-            return;
+    while (l + 1 < r) {
+        int m = (l + r) / 2;
+        if (row) {
+            if (as[i] < as[start_left_part + m]) {
+                r = m;
+            } else {
+                l = m;
+            }
+        } else {
+            if (as[i] > as[start_right_part + m]) {
+                l = m;
+            } else {
+                r = m;
+            }
         }
     }
-    res[i] = #TODO
+
+    res[start_left_part + (i % size_of_part) + l + 1] = as[i];
 }

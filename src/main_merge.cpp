@@ -66,17 +66,12 @@ int main(int argc, char **argv) {
             for (int i = 1; i < n; i *= 2) {
                 merge.exec(gpu::WorkSize(workGroupSize, global_work_size), as_gpu, res_gpu, n, i);
                 as_gpu.swap(res_gpu);
-                for (int j = 0; j < n; ++j) {
-                    std::cout << as[j] << ' ';
-                }
-                std::cout << '\n';
             }
-            as_gpu.swap(res_gpu);
             t.nextLap();
         }
         std::cout << "GPU: " << t.lapAvg() << "+-" << t.lapStd() << " s" << std::endl;
         std::cout << "GPU: " << (n / 1000 / 1000) / t.lapAvg() << " millions/s" << std::endl;
-        res_gpu.readN(as.data(), n);
+        as_gpu.readN(as.data(), n);
     }
     // Проверяем корректность результатов
     for (int i = 0; i < n; ++i) {
