@@ -47,14 +47,13 @@ __kernel void matrix_multiplication_2(__global float *a, __global float *b, __gl
     for (int th = 0; th < THREAD_WORK; ++th) {
         sum[th] = 0.0f;
     }
-    int STRIPE_SIZE = TILE_SIZE / THREAD_WORK;
     for (int tileK = 0; tileK * TILE_SIZE < K; ++tileK) {
         if (j < M && i < N / THREAD_WORK) {
             for (int th = 0; th < THREAD_WORK; ++th) {
-                tileA[local_j][local_i + th * STRIPE_SIZE] = a[j * K + (tileK * TILE_SIZE + local_i) +
-                                                               th * STRIPE_SIZE];
-                tileB[local_j][local_i + th * STRIPE_SIZE] = b[(tileK * TILE_SIZE + local_j) * N + i +
-                                                               th * STRIPE_SIZE];
+                tileA[local_j][local_i * THREAD_WORK + th] = a[j * K +
+                                                               tileK * TILE_SIZE + local_i * THREAD_WORK + th];
+                tileB[local_j][local_i * THREAD_WORK + th] = b[(tileK * TILE_SIZE + local_j) * N +
+                                                               i * THREAD_WORK + th];
             }
         }
         barrier(CLK_LOCAL_MEM_FENCE);
@@ -63,7 +62,7 @@ __kernel void matrix_multiplication_2(__global float *a, __global float *b, __gl
             for (int k = 0; k < TILE_SIZE; ++k) {
                 float tmp = tileA[local_j][k];
                 for (int th = 0; th < THREAD_WORK; ++th) {
-                    sum[th] += tmp * tileB[k][local_i + th * STRIPE_SIZE];
+                    sum[th] += tmp * tileB[k][local_i * THREAD_WORK + th];
                 }
             }
         }
@@ -72,7 +71,7 @@ __kernel void matrix_multiplication_2(__global float *a, __global float *b, __gl
     }
     if (j < M && i < N / THREAD_WORK) {
         for (int th = 0; th < THREAD_WORK; ++th) {
-            c[j * N + i + th * STRIPE_SIZE] = sum[th];
+            c[j * N + i * THREAD_WORK + th] = sum[th];
         }
     }
 }
