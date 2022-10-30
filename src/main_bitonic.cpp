@@ -38,8 +38,7 @@ int main(int argc, char **argv) {
     context.init(device.device_id_opencl);
     context.activate();
 
-//    unsigned int n = 32 * 1024 * 1024;
-    unsigned int n = 1024;
+    unsigned int n = 32 * 1024 * 1024;
     int benchmarkingIters = 10;
     int cpuBenchmarkingIters = 3;
     std::vector<float> as(n, 0);
@@ -67,6 +66,8 @@ int main(int argc, char **argv) {
     {
         ocl::Kernel bitonic(bitonic_kernel, bitonic_kernel_length, "bitonic");
         bitonic.compile();
+        ocl::Kernel bitonicLocal(bitonic_kernel, bitonic_kernel_length, "bitonic_local");
+        bitonicLocal.compile();
 
         timer t;
         for (int iter = 0; iter < benchmarkingIters; ++iter) {
@@ -74,13 +75,15 @@ int main(int argc, char **argv) {
 
             t.restart();// Запускаем секундомер после прогрузки данных, чтобы замерять время работы кернела, а не трансфер данных
 
-            unsigned int workGroupSize = 128;
+            unsigned int workGroupSize = 256;
             unsigned int global_work_size = ((n + 1) / 2 + workGroupSize - 1) / workGroupSize * workGroupSize;
 
-            for (uint blockOrder = 0; (1 << (blockOrder + 1)) <= n; ++blockOrder) {
-                uint blockSize = 1 << blockOrder;
-                for (uint step = blockSize; step >= 1; step /= 2) {
-                    bitonic.exec(gpu::WorkSize(workGroupSize, global_work_size), as_gpu, n, blockOrder, step);
+            bitonicLocal.exec(gpu::WorkSize(workGroupSize, global_work_size), as_gpu, n);
+
+            for (uint blockOrder = 9; (1 << (blockOrder + 1)) <= n; ++blockOrder) {
+                for (uint stepOrderT = blockOrder + 1; stepOrderT >= 1; --stepOrderT) {
+                    uint stepOrder = stepOrderT - 1;
+                    bitonic.exec(gpu::WorkSize(workGroupSize, global_work_size), as_gpu, n, blockOrder, stepOrder);
                 }
             }
 
