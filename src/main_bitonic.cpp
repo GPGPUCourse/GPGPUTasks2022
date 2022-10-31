@@ -50,13 +50,18 @@ int main(int argc, char **argv) {
         std::cout << "CPU: " << t.lapAvg() << "+-" << t.lapStd() << " s" << std::endl;
         std::cout << "CPU: " << (n / 1000 / 1000) / t.lapAvg() << " millions/s" << std::endl;
     }
-    /*
+
     gpu::gpu_mem_32f as_gpu;
     as_gpu.resizeN(n);
 
     {
-        ocl::Kernel bitonic(bitonic_kernel, bitonic_kernel_length, "bitonic");
+        unsigned int workGroupSize = 128;
+        std::string defines = " -D WORK_GROUP_SIZE=" + to_string(workGroupSize);
+        ocl::Kernel bitonic(bitonic_kernel, bitonic_kernel_length, "bitonic", defines);
         bitonic.compile();
+
+        ocl::Kernel bitonic_local(bitonic_kernel, bitonic_kernel_length, "bitonic_local", defines);
+        bitonic_local.compile();
 
         timer t;
         for (int iter = 0; iter < benchmarkingIters; ++iter) {
@@ -64,9 +69,17 @@ int main(int argc, char **argv) {
 
             t.restart();// Запускаем секундомер после прогрузки данных, чтобы замерять время работы кернела, а не трансфер данных
 
-            unsigned int workGroupSize = 128;
-            unsigned int global_work_size = (n + workGroupSize - 1) / workGroupSize * workGroupSize;
-            bitonic.exec(gpu::WorkSize(workGroupSize, global_work_size), as_gpu, n);
+            unsigned int global_work_size = n >> 1; // предполагаю, что размер это степень двойки и больше размера ворк-группы
+            unsigned int steps = 1;
+            for (unsigned int sorted_block_size = 1; sorted_block_size < n; sorted_block_size <<= 1, ++steps) {
+                if (sorted_block_size <= workGroupSize) {
+                    bitonic_local.exec(gpu::WorkSize(workGroupSize, global_work_size), as_gpu, sorted_block_size);
+                } else {
+                    for (unsigned int step = 0; step < steps; ++step) {
+                        bitonic.exec(gpu::WorkSize(workGroupSize, global_work_size), as_gpu, sorted_block_size, step);
+                    }
+                }
+            }
             t.nextLap();
         }
         std::cout << "GPU: " << t.lapAvg() << "+-" << t.lapStd() << " s" << std::endl;
@@ -79,6 +92,6 @@ int main(int argc, char **argv) {
     for (int i = 0; i < n; ++i) {
         EXPECT_THE_SAME(as[i], cpu_sorted[i], "GPU results should be equal to CPU results!");
     }
-*/
+
     return 0;
 }
