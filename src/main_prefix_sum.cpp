@@ -22,7 +22,13 @@ void raiseFail(const T &a, const T &b, std::string message, std::string filename
 
 int main(int argc, char **argv)
 {
-	int benchmarkingIters = 10;
+    gpu::Device device = gpu::chooseGPUDevice(argc, argv);
+
+    gpu::Context context;
+    context.init(device.device_id_opencl);
+    context.activate();
+
+    int benchmarkingIters = 10;
 	unsigned int max_n = (1 << 24);
 
 	for (unsigned int n = 2; n <= max_n; n *= 2) {
@@ -76,8 +82,51 @@ int main(int argc, char **argv)
 			std::cout << "CPU: " << (n / 1000.0 / 1000.0) / t.lapAvg() << " millions/s" << std::endl;
 		}
 
+        gpu::gpu_mem_32u as_gpu, bs_gpu, as_buf_gpu;
+        as_gpu.resizeN(n);
+        bs_gpu.resizeN(n);
+        as_buf_gpu.resizeN(n);
+
 		{
-			// TODO: implement on OpenCL
-		}
+            ocl::Kernel init(prefix_sum_kernel, prefix_sum_kernel_length, "init");
+            init.compile();
+
+            ocl::Kernel update(prefix_sum_kernel, prefix_sum_kernel_length, "update");
+            update.compile();
+
+            ocl::Kernel reduce(prefix_sum_kernel, prefix_sum_kernel_length, "reduce");
+            reduce.compile();
+
+            timer t;
+            for (int iter = 0; iter < benchmarkingIters; ++iter) {
+                as_gpu.writeN(as.data(), n);
+                unsigned int workGroupSize = 128;
+                unsigned int fullWorkSize = (n + workGroupSize - 1) / workGroupSize * workGroupSize;
+                init.exec(gpu::WorkSize(workGroupSize, fullWorkSize), bs_gpu, n);
+
+                t.restart();// Запускаем секундомер после прогрузки данных, чтобы замерять время работы кернела, а не трансфер данных
+
+                unsigned int m = n;
+                auto reduceWorkSize = [&]() {
+                    return ((m + 1) / 2 + workGroupSize - 1) / workGroupSize * workGroupSize;
+                };
+                for (unsigned int bit = 0; (1 << bit) <= n; ++bit) {
+                    update.exec(gpu::WorkSize(workGroupSize, fullWorkSize), as_gpu, bs_gpu, n, bit);
+                    reduce.exec(gpu::WorkSize(workGroupSize, reduceWorkSize()), as_gpu, as_buf_gpu, m);
+                    m = (m + 1) / 2;
+                    std::swap(as_gpu, as_buf_gpu);
+                }
+                t.nextLap();
+            }
+            std::cout << "GPU: " << t.lapAvg() << "+-" << t.lapStd() << " s" << std::endl;
+            std::cout << "GPU: " << (n / 1000 / 1000) / t.lapAvg() << " millions/s" << std::endl;
+
+            bs_gpu.readN(bs.data(), n);
+
+            // Проверяем корректность результатов
+            for (int i = 0; i < n; ++i) {
+                EXPECT_THE_SAME(bs[i], reference_result[i], "GPU results should be equal to CPU results!");
+            }
+        }
 	}
 }
