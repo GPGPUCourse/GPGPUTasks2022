@@ -33,8 +33,8 @@ int main(int argc, char **argv) {
     context.init(device.device_id_opencl);
     context.activate();
 
-    int benchmarkingIters = 1;
-    unsigned int n = 1024 * 1024;
+    int benchmarkingIters = 10;
+    unsigned int n = 32 * 1024 * 1024;
     unsigned int cnt_bits_sort = 4;
     unsigned int work_group_size = 128;
 
