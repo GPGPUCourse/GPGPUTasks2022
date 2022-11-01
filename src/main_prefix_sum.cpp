@@ -93,7 +93,7 @@ int main(int argc, char **argv)
 		{
             std::vector<unsigned int> result(n, 0);
             timer t;
-            for (int iter = 0; iter < 1; ++iter) {
+            for (int iter = 0; iter < benchmarkingIters; ++iter) {
                 as_gpu.writeN(as.data(), n);
                 res_gpu.writeN(result.data(), n);
 
@@ -101,7 +101,8 @@ int main(int argc, char **argv)
 
                 int bit_num = 0;
                 while (true) {
-                    prefix_sum.exec(gpu::WorkSize(128, n), as_gpu, res_gpu, bit_num);
+                    int group_size = std::min(n, (unsigned int)(128));
+                    prefix_sum.exec(gpu::WorkSize(group_size, n), as_gpu, res_gpu, bit_num);
                     if ((1 << bit_num) >= n) {
                         break;
                     }
