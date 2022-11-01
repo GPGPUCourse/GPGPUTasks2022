@@ -24,8 +24,17 @@ __kernel void matrix_multiplication(__global const float *a,
 
     float result = 0.0;
     for (int i = 0; i < K; i += WORK_GROUP) {
-        a_local[local_m][local_k] = a[global_m * K + local_k + i];
-        b_local[local_m][local_k] = b[N * (local_m + i) + global_k];
+        if (global_m < M && (local_k + i) < K) {
+            a_local[local_m][local_k] = a[global_m * K + local_k + i];
+        } else {
+            a_local[local_m][local_k] = 0;
+        }
+
+        if (global_k < N && (local_m + i) < K) {
+            b_local[local_m][local_k] = b[N * (local_m + i) + global_k];
+        } else {
+            b_local[local_m][local_k] = 0;
+        }
 
         barrier(CLK_LOCAL_MEM_FENCE);
 
@@ -36,7 +45,9 @@ __kernel void matrix_multiplication(__global const float *a,
         barrier(CLK_LOCAL_MEM_FENCE);
     }
 
-    c[global_m * N + global_k] = result;
+    if (global_m < M && global_k < N) {
+        c[global_m * N + global_k] = result;
+    }
 }
 
 #define WORK_GROUP_FMA 32
