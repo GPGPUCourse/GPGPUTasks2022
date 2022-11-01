@@ -83,7 +83,7 @@ int main(int argc, char **argv) {
 
             t.restart();// Запускаем секундомер после прогрузки данных, чтобы замерять время работы кернела, а не трансфер данных
 
-            for (int i = 0; i <= 32; i += cnt_bits_sort) {
+            for (int i = 0; i < 32; i += cnt_bits_sort) {
                 bs_gpu.writeN(empty_prefix_vector.data(), prefix_size);
                 cs_gpu.writeN(empty_prefix_vector.data(), prefix_size);
                 ds_gpu.writeN(empty_prefix_vector.data(), prefix_size);
@@ -115,7 +115,7 @@ int main(int argc, char **argv) {
         std::cout << "GPU: " << t.lapAvg() << "+-" << t.lapStd() << " s" << std::endl;
         std::cout << "GPU: " << (n / 1000 / 1000) / t.lapAvg() << " millions/s" << std::endl;
 
-        res_gpu.readN(as.data(), n);
+        as_gpu.readN(as.data(), n);
     }
 
     // Проверяем корректность результатов
