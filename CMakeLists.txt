@@ -32,5 +32,5 @@ add_executable(prefix_sum src/main_prefix_sum.cpp src/cl/prefix_sum_cl.h)
 target_link_libraries(prefix_sum libclew libgpu libutils)
 
 convertIntoHeader(src/cl/radix.cl src/cl/radix_cl.h radix_kernel)
-add_executable(radix src/main_radix.cpp src/cl/radix_cl.h)
+add_executable(radix src/main_radix.cpp src/cl/radix_cl.h src/cl/prefix_sum_cl.h)
 target_link_libraries(radix libclew libgpu libutils)
