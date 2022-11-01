@@ -11,6 +11,7 @@
 #include <iostream>
 #include <stdexcept>
 #include <vector>
+#include <climits>
 
 
 template<typename T>
