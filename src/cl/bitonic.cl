@@ -4,30 +4,38 @@
 
 #line 6
 
-__kernel void bitonic(__global float *as, int n, int k, int m) {
-    int id = get_global_id(0);
-    bool odd = (id / m) % 2, inc = as[id] < as[id + k / 2];
-    if (id + k / 2 < n && id % k < k / 2 && (odd && inc || !odd && !inc)) {
-        float tmp = as[id];
-        as[id] = as[id + k / 2];
-        as[id + k / 2] = tmp;
+__kernel void bitonic(__global float *as, int n, int m, int k) {
+    int i = get_global_id(0);
+    if (i % (2 * k) >= k || i + k >= n)
+        return;
+    bool inc = as[i] < as[i + k], even = (i / m) % 2 == 0;
+    if (even && !inc || !even && inc) {
+        float tmp = as[i];
+        as[i] = as[i + k];
+        as[i + k] = tmp;
     }
 }
 
-#define GROUP_SIZE 128
+#define GROUP_SIZE 256
 
-__kernel void bitonic_local(__global float *as, int n, int k, int m) {
-    int id = get_global_id(0);
-    int local_id = get_local_id(0);
+__kernel void bitonic_local(__global float *as, int n, int m, int k) {
+    int i = get_global_id(0);
+    bool even = (i / m) % 2 == 0;
+
+    int local_i = get_local_id(0);
     __local float local_as[GROUP_SIZE];
-    local_as[local_id] = as[id];
+    local_as[local_i] = as[i];
     barrier(CLK_LOCAL_MEM_FENCE);
-    bool odd = (id / m) % 2, inc = as[id] < as[id + k / 2];
-    if (id + k / 2 < n && id % k < k / 2 && (odd && inc || !odd && !inc)) {
-        float tmp = local_as[local_id];
-        local_as[local_id] = local_as[local_id + k / 2];
-        local_as[local_id + k / 2] = tmp;
+
+    for (; k >= 1; k /= 2) {
+        bool inc = local_as[local_i] < local_as[local_i + k];
+        if (i + k < n && i % (2 * k) < k && (even && !inc || !even && inc)) {
+            float tmp = local_as[local_i];
+            local_as[local_i] = local_as[local_i + k];
+            local_as[local_i + k] = tmp;
+        }
+        barrier(CLK_LOCAL_MEM_FENCE);
     }
-    barrier(CLK_LOCAL_MEM_FENCE);
-    as[id] = local_as[local_id];
+
+    as[i] = local_as[local_i];
 }

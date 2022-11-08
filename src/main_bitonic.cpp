@@ -30,7 +30,7 @@ int main(int argc, char **argv) {
     context.init(device.device_id_opencl);
     context.activate();
 
-    int benchmarkingIters = 1;
+    int benchmarkingIters = 10;
     unsigned int n = 32 * 1024 * 1024;
     std::vector<float> as(n, 0);
     FastRandom r(n);
@@ -53,41 +53,39 @@ int main(int argc, char **argv) {
 
     gpu::gpu_mem_32f as_gpu;
     as_gpu.resizeN(n);
+
     {
         ocl::Kernel bitonic(bitonic_kernel, bitonic_kernel_length, "bitonic");
         ocl::Kernel bitonic_local(bitonic_kernel, bitonic_kernel_length, "bitonic_local");
         bitonic.compile();
         bitonic_local.compile();
+
         timer t;
         for (int iter = 0; iter < benchmarkingIters; ++iter) {
             as_gpu.writeN(as.data(), n);
+
             t.restart();// Запускаем секундомер после прогрузки данных, чтобы замерять время работы кернела, а не трансфер данных
 
-            unsigned int workGroupSize = 128;
+            unsigned int workGroupSize = 256;
             unsigned int global_work_size = (n + workGroupSize - 1) / workGroupSize * workGroupSize;
 
-            unsigned int m = 1;
-            while (m < global_work_size) {
-                m *= 2;
-                unsigned int k = m;
-                while (k >= workGroupSize) {
-                    bitonic.exec(gpu::WorkSize(workGroupSize, global_work_size), as_gpu, n, k, m);
-                    k /= 2;
-                }
-                while (k >= 2) {
-                    bitonic_local.exec(gpu::WorkSize(workGroupSize, global_work_size), as_gpu, n, k, m);
-                    k /= 2;
-                }
+            for (unsigned int num_sorted = 1; num_sorted <= n; num_sorted *= 2) {
+                unsigned int k = num_sorted;
+                for (; k >= workGroupSize; k /= 2)
+                    bitonic.exec(gpu::WorkSize(workGroupSize, global_work_size), as_gpu, n, num_sorted, k);
+                bitonic_local.exec(gpu::WorkSize(workGroupSize, global_work_size), as_gpu, n, num_sorted, k);
             }
 
             t.nextLap();
         }
         std::cout << "GPU: " << t.lapAvg() << "+-" << t.lapStd() << " s" << std::endl;
         std::cout << "GPU: " << (n / 1000 / 1000) / t.lapAvg() << " millions/s" << std::endl;
+
         as_gpu.readN(as.data(), n);
     }
+
     // Проверяем корректность результатов
-    for (int i = 0; i < n; ++i) {
+    for (unsigned int i = 0; i < n; ++i) {
         EXPECT_THE_SAME(as[i], cpu_sorted[i], "GPU results should be equal to CPU results!");
     }
 

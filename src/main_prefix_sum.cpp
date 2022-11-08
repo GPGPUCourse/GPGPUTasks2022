@@ -22,6 +22,17 @@ void raiseFail(const T &a, const T &b, std::string message, std::string filename
 
 int main(int argc, char **argv)
 {
+    gpu::Device device = gpu::chooseGPUDevice(argc, argv);
+
+    gpu::Context context;
+    context.init(device.device_id_opencl);
+    context.activate();
+
+    ocl::Kernel prefix_sum(prefix_sum_kernel, prefix_sum_kernel_length, "prefix_sum");
+    prefix_sum.compile();
+    ocl::Kernel pairwise_sum(prefix_sum_kernel, prefix_sum_kernel_length, "pairwise_sum");
+    pairwise_sum.compile();
+
 	int benchmarkingIters = 10;
 	unsigned int max_n = (1 << 24);
 
@@ -77,7 +88,40 @@ int main(int argc, char **argv)
 		}
 
 		{
-			// TODO: implement on OpenCL
+            unsigned int workGroupSize = 256;
+            unsigned int global_work_size = (n + workGroupSize - 1) / workGroupSize * workGroupSize;
+
+            gpu::gpu_mem_32u as_gpu, bs_gpu, cs_gpu;
+            as_gpu.resizeN(n);
+            bs_gpu.resizeN(n);
+            cs_gpu.resizeN(n);
+
+            timer t;
+            for (unsigned int i = 0; i < benchmarkingIters; i++) {
+                as_gpu.writeN(as.data(), n);
+                std::vector<unsigned int> zeros(n, 0);
+                bs_gpu.writeN(zeros.data(), n);
+                t.restart();
+
+                unsigned int m = n / 2, shift = 0;
+                while (true) {
+                    prefix_sum.exec(gpu::WorkSize(workGroupSize, global_work_size), as_gpu, bs_gpu, n, shift);
+                    if (m == 0) break;
+                    pairwise_sum.exec(gpu::WorkSize(workGroupSize, global_work_size), as_gpu, cs_gpu, m);
+                    as_gpu.swap(cs_gpu);
+                    m /= 2;
+                    shift++;
+                }
+                t.nextLap();
+            }
+            std::cout << "GPU: " << t.lapAvg() << "+-" << t.lapStd() << " s" << std::endl;
+            std::cout << "GPU: " << (n / 1000.0 / 1000.0) / t.lapAvg() << " millions/s" << std::endl;
+
+            std::vector<unsigned int> result(n, 0);
+            bs_gpu.readN(result.data(), n);
+
+            for (unsigned int i = 0; i < n; i++)
+                EXPECT_THE_SAME(reference_result[i], result[i], "CPU and GPU results are not the same!");
 		}
 	}
 }
