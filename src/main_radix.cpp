@@ -50,11 +50,25 @@ int main(int argc, char **argv) {
         std::cout << "CPU: " << t.lapAvg() << "+-" << t.lapStd() << " s" << std::endl;
         std::cout << "CPU: " << (n / 1000 / 1000) / t.lapAvg() << " millions/s" << std::endl;
     }
-    /*
-    gpu::gpu_mem_32u as_gpu;
+
+    gpu::gpu_mem_32u as_gpu, zeros_gpu, ones_gpu, prefix_zeros_gpu, prefix_ones_gpu, tmp_gpu, last_gpu;
     as_gpu.resizeN(n);
+    zeros_gpu.resizeN(n);
+    ones_gpu.resizeN(n);
+    prefix_zeros_gpu.resizeN(n);
+    prefix_ones_gpu.resizeN(n);
+    tmp_gpu.resizeN(n);
+    last_gpu.resizeN(1);
+
+    std::vector<unsigned int> zeros(n, 0);
 
     {
+        ocl::Kernel get_zeros_and_ones(radix_kernel, radix_kernel_length, "get_zeros_and_ones");
+        get_zeros_and_ones.compile();
+        ocl::Kernel prefix_sum(radix_kernel, radix_kernel_length, "prefix_sum");
+        prefix_sum.compile();
+        ocl::Kernel pairwise_sum(radix_kernel, radix_kernel_length, "pairwise_sum");
+        pairwise_sum.compile();
         ocl::Kernel radix(radix_kernel, radix_kernel_length, "radix");
         radix.compile();
 
@@ -66,7 +80,40 @@ int main(int argc, char **argv) {
 
             unsigned int workGroupSize = 128;
             unsigned int global_work_size = (n + workGroupSize - 1) / workGroupSize * workGroupSize;
-            radix.exec(gpu::WorkSize(workGroupSize, global_work_size), as_gpu, n);
+            gpu::WorkSize ws = gpu::WorkSize(workGroupSize, global_work_size);
+
+            for (unsigned int digit = 0; digit < 32; digit++) {
+                get_zeros_and_ones.exec(ws, as_gpu, n, digit, zeros_gpu, ones_gpu);
+
+                // Составляем частичные суммы для нулей
+                prefix_zeros_gpu.writeN(zeros.data(), n);
+                unsigned int m = n / 2, shift = 0;
+                while (true) {
+                    prefix_sum.exec(ws, zeros_gpu, prefix_zeros_gpu, n, shift, last_gpu, 1);
+                    if (m == 0) break;
+                    pairwise_sum.exec(ws, zeros_gpu, tmp_gpu, m);
+                    zeros_gpu.swap(tmp_gpu);
+                    m /= 2;
+                    shift++;
+                }
+
+                // Составляем частичные суммы для единиц
+                prefix_ones_gpu.writeN(zeros.data(), n);
+                m = n / 2;
+                shift = 0;
+                while (true) {
+                    prefix_sum.exec(ws, ones_gpu, prefix_ones_gpu, n, shift, last_gpu, 0);
+                    if (m == 0) break;
+                    pairwise_sum.exec(ws, ones_gpu, tmp_gpu, m);
+                    ones_gpu.swap(tmp_gpu);
+                    m /= 2;
+                    shift++;
+                }
+
+                // Делаем шаг сортировки
+                radix.exec(ws, as_gpu, tmp_gpu, prefix_zeros_gpu, prefix_ones_gpu, n, digit, last_gpu);
+                as_gpu.swap(tmp_gpu);
+            }
             t.nextLap();
         }
         std::cout << "GPU: " << t.lapAvg() << "+-" << t.lapStd() << " s" << std::endl;
@@ -79,6 +126,6 @@ int main(int argc, char **argv) {
     for (int i = 0; i < n; ++i) {
         EXPECT_THE_SAME(as[i], cpu_sorted[i], "GPU results should be equal to CPU results!");
     }
-*/
+
     return 0;
 }
