@@ -13,10 +13,13 @@ __kernel void matrix_transpose(__global float *a, __global float *at, unsigned i
     int local_i = get_local_id(0);
     int local_j = get_local_id(1);
 
-    if (i < m && j < k)
-        tile[local_j][local_i] = a[i * m + j];
+    if (j < m && i < k)
+        tile[local_j][local_i] = a[j * k + i];
     barrier(CLK_LOCAL_MEM_FENCE);
 
-    if (i < m && j < k)
-        at[j * k + i] = tile[local_j][local_i];
+    int at_i = i - local_i + local_j;
+    int at_j = j - local_j + local_i;
+    if (at_j < m && at_i < k) {
+        at[at_i * m + at_j] = tile[local_i][local_j];
+    }
 }
