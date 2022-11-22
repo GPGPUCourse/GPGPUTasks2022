@@ -34,8 +34,9 @@ __kernel void matrix_multiplication(__global const float* as,
     cs[j * N + i] = sum;
 }
 
-#define THREAD_WORK 4
+#define WPT 4
 #define RTS 4
+#define TS 16
 __kernel void matrix_multiplication_fma(__global const float* as,
                                     __global const float* bs,
                                     __global float* cs,
@@ -43,37 +44,43 @@ __kernel void matrix_multiplication_fma(__global const float* as,
                                     unsigned int K,
                                     unsigned int N)
 {
-    int i = get_group_id(0);
-    int j = get_group_id(1);
     int local_i = get_local_id(0);
     int local_j = get_local_id(1);
+    int i = TS * get_group_id(0) + local_i;
+    int j = TS * get_group_id(1) + local_j;
+//    for (int w = 0; w < WPT; w++) {
+//        cs[(j + w * RTS) * M + i] = 0;
+//    }
+//    barrier(CLK_GLOBAL_MEM_FENCE);
 
-    __local float tileA[TILE_SIZE][TILE_SIZE];
-    __local float tileB[TILE_SIZE][TILE_SIZE];
+    __local float tileA[TS][TS];
+    __local float tileB[TS][TS];
 
-    float sum[THREAD_WORK];
-    for (int w = 0; w < THREAD_WORK; w++) {
-        sum[w] = 0;
+    float sum[WPT];
+    for (int w = 0; w < WPT; w++) {
+        sum[w] = 0.0f;
     }
 
-    for (int tileK = 0; tileK * TILE_SIZE < K; tileK++) {
-        for (int w = 0; w < THREAD_WORK && local_j + w * RTS < TILE_SIZE && (j + w * RTS) < K && (tileK * TILE_SIZE + local_j + w * RTS) < N; w++) {
-            tileA[local_j + w * RTS][local_i] = as[(j + w * RTS) * M + (tileK * TILE_SIZE + local_i)];
-            tileB[local_j + w * RTS][local_i] = bs[(tileK * TILE_SIZE + local_j + w * RTS) * K + i];
+    for (int t = 0; t < K / TS; t++) {
+        for (int w = 0; w < WPT; w++) {
+            const int tiled_i = TS * t + local_i;
+            const int tiled_j = TS * t + local_j;
+            tileA[local_j + w * RTS][local_i] = as[(tiled_j + w * RTS) * M + i];
+            tileB[local_j + w * RTS][local_i] = bs[(j + w * RTS) * K + tiled_i];
         }
 
         barrier(CLK_LOCAL_MEM_FENCE);
 
-        for (int k = 0; k < TILE_SIZE; k++) {
-            float tmp = tileA[local_j][k];
-            for (int w = 0; w < THREAD_WORK && local_i*THREAD_WORK+w*RTS < N; w++) {
-                sum[w] += tmp * tileB[k][local_i+w*RTS];
+        for (int k = 0; k < TS; k++) {
+            float tmp = tileA[k][local_i];
+            for (int w = 0; w < WPT; w++) {
+                sum[w] += tmp * tileB[local_j + w * RTS][k];
             }
         }
         barrier(CLK_LOCAL_MEM_FENCE);
     }
-    for (int w = 0; w < THREAD_WORK && (j + w * RTS) * N + i < M * N; w++) {
-        cs[(j + w * RTS) * N + i] = sum[w];
+    for (int w = 0; w < WPT; w++) {
+        cs[(j + w * RTS) * M + i] = sum[w];
     }
 
 }
