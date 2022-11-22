@@ -51,7 +51,7 @@ void renderToColor(const float* results, unsigned char* img_rgb, unsigned int wi
 
 void renderInWindow(float centralX, float centralY, unsigned int iterationsLimit, bool useGPU);
 
-unsigned int group_size = 2;
+unsigned int group_size = 1;
 
 int main(int argc, char **argv)
 {
