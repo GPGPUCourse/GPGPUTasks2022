@@ -37,8 +37,8 @@ __kernel void matrix_multiplication(__global const float* as,
 #define WPT 4
 #define RTS 4
 #define TS 16
-__kernel void matrix_multiplication_fma(__global const float* as,
-                                    __global const float* bs,
+__kernel void matrix_multiplication_fma(__global const float* bs,
+                                    __global const float* as,
                                     __global float* cs,
                                     unsigned int M,
                                     unsigned int K,

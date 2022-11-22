@@ -127,8 +127,8 @@ int main(int argc, char **argv)
         for (int iter = 0; iter < benchmarkingIters; ++iter) {
             unsigned int work_group_size_M = 16;
             unsigned int work_group_size_N = 16/4;
-            unsigned int global_work_size_M = (M + work_group_size_M - 1) / work_group_size_M;
-            unsigned int global_work_size_N = (N + work_group_size_N - 1) / work_group_size_N;
+            unsigned int global_work_size_M = (M + work_group_size_M - 1) / work_group_size_M * work_group_size_M;
+            unsigned int global_work_size_N = (N/4 + work_group_size_N - 1) / work_group_size_N * work_group_size_N;
             matrix_multiplication_kernel.exec(
                     gpu::WorkSize(work_group_size_M, work_group_size_N, global_work_size_M, global_work_size_N), as_gpu,
                     bs_gpu, cs_gpu, M, K, N);
