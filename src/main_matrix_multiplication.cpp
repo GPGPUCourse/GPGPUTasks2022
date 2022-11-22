@@ -147,7 +147,7 @@ int main(int argc, char **argv)
     for (int i = 0; i < M * N; ++i) {
         double a = cs[i];
         double b = cs_cpu_reference[i];
-        if (a != 0.0 && b != 0.0) {
+        if (a != 0.0 || b != 0.0) {
             double diff = fabs(a - b) / std::max(fabs(a), fabs(b));
             diff_sum += diff;
         }
