@@ -6,9 +6,9 @@
 
 #define ARRAY_SIZE 32 * 1024 * 1024
 
-float b[ARRAY_SIZE];
-
-__kernel void merge(__global float* as, unsigned int n)
+__kernel void merge(__global float* as,
+                    __global float* b,
+                    unsigned int n)
 {
     int index = get_global_id(0);
 

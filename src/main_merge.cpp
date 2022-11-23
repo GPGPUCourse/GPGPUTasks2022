@@ -36,7 +36,7 @@ int main(int argc, char **argv) {
     FastRandom r(n);
     for (unsigned int i = 0; i < n; ++i) {
         as[i] = r.nextf();
-//        as[i] = 1 - float(i) / n;
+//        as[i] = float(i);
     }
     std::cout << "Data generated for n=" << n << "!" << std::endl;
 //    for (int i = 0; i < 20; ++i) {
@@ -69,7 +69,7 @@ int main(int argc, char **argv) {
             t.restart();// Запускаем секундомер после прогрузки данных, чтобы замерять время работы кернела, а не трансфера данных
             unsigned int workGroupSize = 1;
             unsigned int global_work_size = n/2;
-            merge.exec(gpu::WorkSize(workGroupSize, global_work_size), as_gpu, n);
+            merge.exec(gpu::WorkSize(workGroupSize, global_work_size), as_gpu, bs_gpu, n);
             t.nextLap();
         }
         std::cout << "GPU: " << t.lapAvg() << "+-" << t.lapStd() << " s" << std::endl;
