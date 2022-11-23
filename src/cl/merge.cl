@@ -12,13 +12,15 @@ __kernel void merge(__global float* as,
 {
     int index = get_global_id(0);
 
-    as[index] = 0;
+//    as[index] = 0;
 
     barrier(CLK_GLOBAL_MEM_FENCE);
 
     if (index >= n) {
         return;
     }
+
+//    __global float b[ARRAY_SIZE];
 
     for (int level_size = 2; level_size < n*2; level_size*=2) {
 
@@ -40,9 +42,6 @@ __kernel void merge(__global float* as,
 //        for (int i = part_begin; i < part_end && i < n; i++) {
 //            as[i] = index; //b[i];
 //        }
-
-        if (index == 1)
-            as[index] = 100;
 
         if (part_end > n) {
             part_end = n;
@@ -104,15 +103,10 @@ __kernel void merge(__global float* as,
         int i = part_begin, j = part_center;
         int k = part_begin;
         while (i < part_center && j < part_end) {
-            if (as[i] < as[j]) {
-                b[k] = as[i];
-                k++;
-                i++;
-            } else {
-                b[k] = as[j];
-                k++;
-                j++;
-            }
+            if (as[i] < as[j])
+                b[k++] = as[i++];
+            else
+                b[k++] = as[j++];
         }
         while (i < part_center)
             b[k++] = as[i++];
