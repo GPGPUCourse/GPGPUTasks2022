@@ -86,7 +86,7 @@ int main(int argc, char **argv)
             timer t;
             for (int iter = 0; iter < benchmarkingIters; ++iter) {
                 sum_gpu.writeN(&sum, 1);
-                sum_ker.exec(gpu::WorkSize(1, global_work_size),
+                sum_ker.exec(gpu::WorkSize(workGroupSize, global_work_size),
                              as_gpu, sum_gpu, n);
                 t.nextLap();
             }
@@ -107,12 +107,12 @@ int main(int argc, char **argv)
             sum_ker.compile();
 
             unsigned int workGroupSize = 256;
-            unsigned int global_work_size = (n + workGroupSize - 1) / workGroupSize * workGroupSize;
+            unsigned int global_work_size = (n/64 + workGroupSize - 1) / workGroupSize * workGroupSize;
 
             timer t;
             for (int iter = 0; iter < benchmarkingIters; ++iter) {
                 sum_gpu.writeN(&sum, 1);
-                sum_ker.exec(gpu::WorkSize(1, global_work_size),
+                sum_ker.exec(gpu::WorkSize(workGroupSize, global_work_size),
                              as_gpu, sum_gpu, n);
                 t.nextLap();
             }
