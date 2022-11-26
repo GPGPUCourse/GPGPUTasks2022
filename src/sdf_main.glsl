@@ -14,55 +14,61 @@ float sdPlane(vec3 p)
 // see https://iquilezles.org/articles/distfunctions/
 float sdCapsule( vec3 p, vec3 a, vec3 b, float r )
 {
-  // TODO
-    return 0.0;
+  vec3 pa = p - a, ba = b - a;
+  float h = clamp( dot(pa,ba)/dot(ba,ba), 0.0, 1.0 );
+  return length( pa - ba*h ) - r;
 }
 
 // smooth minimum function to create gradual transitions between SDFs
 // https://iquilezles.org/articles/smin/
-float smoothmin(float d0, float d1, float k)
+float smoothmin( float a, float b, float k )
 {
-    // TODO
-    return 0.0;
+    float h = max( k-abs(a-b), 0.0 )/k;
+    return min( a, b ) - h*h*k*(1.0/4.0);
 }
 
 // косинус который пропускает некоторые периоды, удобно чтобы махать ручкой не все время
 float lazycos(float angle)
 {
     int nsleep = 10;
-    
+
     int iperiod = int(angle / 6.28318530718) % nsleep;
     if (iperiod < 3) {
         return cos(angle);
     }
-    
-    return 1.0;
+
+    return 1.;
 }
 
 vec4 sdBody(vec3 p)
 {
     float d = 1e10;
 
-    // body, two spheres with smoothmin
-    // TODO
-    d = sdSphere((p - vec3(0.0, 0.35, -0.7)), 0.35);
-    
-    // hands, two capsules, can wave with lazycos
-    // TODO
-    
-    // legs, two capsules
-    // TODO
-    
-    // return distance and color
-    return vec4(d, vec3(0.0, 1.0, 0.0));
+    float upper_body = sdSphere((p - vec3(0.0, 0.7, -0.7)), 0.25);
+    float lower_body = sdSphere((p - vec3(0.0, 0.35, -0.7)), 0.35);
+    float body = smoothmin(lower_body, upper_body, 0.3);
+
+
+    float left_leg = sdCapsule(p, vec3(-0.07, 0, -0.7), vec3(-0.07, -0.05, -0.7), 0.04);
+    float right_leg = sdCapsule(p, vec3(0.07, 0, -0.7), vec3(0.07, -0.05, -0.7), 0.04);
+    float legs = min(left_leg, right_leg);
+
+    float res = min(body, legs);
+
+    float time = lazycos(10. * iTime);
+    float left_hand = sdCapsule(p, vec3(-0.3, 0.37, -0.7), vec3(-0.42, 0.37 * cos(time), -0.7), 0.05);
+    float right_hand = sdCapsule(p, vec3(0.3, 0.37, -0.7), vec3(0.42, 0.199, -0.7), 0.05);
+    float hands = min(left_hand, right_hand);
+
+    res = min(res, hands);
+    return vec4(res, vec3(0.0, 1.0, 0.0));
 }
 
 vec4 sdEyeBall(vec3 p)
 {
 
-    // TODO
-    float d0 = 1e10;
-    
+    float d0 = sdSphere(p - vec3(0., 0.55, -0.5), 0.23);
+
     // return distance and color
     return vec4(d0, vec3(1.0, 1.0, 1.0));
 
@@ -71,9 +77,8 @@ vec4 sdEyeBall(vec3 p)
 vec4 sdEyePupil(vec3 p)
 {
 
-    // TODO
-    float d0 = 1e10;
-    
+    float d0 = sdSphere(p - vec3(0., 0.55, -0.32), 0.1);
+
     // return distance and color
     return vec4(d0, vec3(0.0, 0.0, 0.0));
 
@@ -83,8 +88,8 @@ vec4 sdEyeIris(vec3 p)
 {
 
     // TODO
-    float d0 = 1e10;
-    
+    float d0 = sdSphere(p - vec3(0., 0.55, -0.42), 0.17);
+
     // return distance and color
     return vec4(d0, vec3(0.0, 1.0, 1.0));
 
@@ -92,25 +97,36 @@ vec4 sdEyeIris(vec3 p)
 
 vec4 sdEye(vec3 p)
 {
-
     vec4 res = vec4(1e10, 0.0, 0.0, 0.0);
-    
+    vec4 eyeBallRes = sdEyeBall(p);
+    vec4 eyePupilRes = sdEyePupil(p);
+    vec4 eyeIrisRes = sdEyeIris(p);
+
+    if (eyeBallRes.x < res.x) {
+        res = eyeBallRes;
+    }
+    if (eyePupilRes.x < res.x) {
+        res = eyePupilRes;
+    }
+    if (eyeIrisRes.x < res.x) {
+        res = eyeIrisRes;
+    }
     return res;
 }
 
 vec4 sdMonster(vec3 p)
 {
-    // при рисовании сложного объекта из нескольких SDF, удобно на верхнем уровне 
+    // при рисовании сложного объекта из нескольких SDF, удобно на верхнем уровне
     // модифицировать p, чтобы двигать объект как целое
     p -= vec3(0.0, 0.08, 0.0);
-    
+
     vec4 res = sdBody(p);
-    
+
     vec4 eye = sdEye(p);
     if (eye.x < res.x) {
         res = eye;
     }
-    
+
     return res;
 }
 
@@ -118,13 +134,13 @@ vec4 sdMonster(vec3 p)
 vec4 sdTotal(vec3 p)
 {
     vec4 res = sdMonster(p);
-    
-    
+
+
     float dist = sdPlane(p);
     if (dist < res.x) {
         res = vec4(dist, vec3(1.0, 0.0, 0.0));
     }
-    
+
     return res;
 }
 
@@ -141,14 +157,14 @@ vec3 calcNormal( in vec3 p ) // for function f(p)
 
 vec4 raycast(vec3 ray_origin, vec3 ray_direction)
 {
-    
+
     float EPS = 1e-3;
-    
-    
+
+
     // p = ray_origin + t * ray_direction;
-    
+
     float t = 0.0;
-    
+
     for (int iter = 0; iter < 200; ++iter) {
         vec4 res = sdTotal(ray_origin + t*ray_direction);
         t += res.x;
@@ -163,11 +179,11 @@ vec4 raycast(vec3 ray_origin, vec3 ray_direction)
 
 float shading(vec3 p, vec3 light_source, vec3 normal)
 {
-    
+
     vec3 light_dir = normalize(light_source - p);
-    
+
     float shading = dot(light_dir, normal);
-    
+
     return clamp(shading, 0.5, 1.0);
 
 }
@@ -179,23 +195,23 @@ float specular(vec3 p, vec3 light_source, vec3 N, vec3 camera_center, float shin
     vec3 R = reflect(L, N);
 
     vec3 V = normalize(camera_center - p);
-    
+
     return pow(max(dot(R, V), 0.0), shinyness);
 }
 
 
 float castShadow(vec3 p, vec3 light_source)
 {
-    
+
     vec3 light_dir = p - light_source;
-    
+
     float target_dist = length(light_dir);
-    
-    
+
+
     if (raycast(light_source, normalize(light_dir)).x + 0.001 < target_dist) {
         return 0.5;
     }
-    
+
     return 1.0;
 }
 
@@ -203,35 +219,35 @@ float castShadow(vec3 p, vec3 light_source)
 void mainImage( out vec4 fragColor, in vec2 fragCoord )
 {
     vec2 uv = fragCoord/iResolution.y;
-    
+
     vec2 wh = vec2(iResolution.x / iResolution.y, 1.0);
-    
+
 
     vec3 ray_origin = vec3(0.0, 0.5, 1.0);
     vec3 ray_direction = normalize(vec3(uv - 0.5*wh, -1.0));
-    
+
 
     vec4 res = raycast(ray_origin, ray_direction);
-    
-    
-    
+
+
+
     vec3 col = res.yzw;
-    
-    
+
+
     vec3 surface_point = ray_origin + res.x*ray_direction;
     vec3 normal = calcNormal(surface_point);
-    
+
     vec3 light_source = vec3(1.0 + 2.5*sin(iTime), 10.0, 10.0);
-    
+
     float shad = shading(surface_point, light_source, normal);
     shad = min(shad, castShadow(surface_point, light_source));
     col *= shad;
-    
+
     float spec = specular(surface_point, light_source, normal, ray_origin, 30.0);
     col += vec3(1.0, 1.0, 1.0) * spec;
-    
-    
-    
+
+
+
     // Output to screen
     fragColor = vec4(col, 1.0);
 }
