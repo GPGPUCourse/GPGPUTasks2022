@@ -12,10 +12,10 @@ __kernel void matrix_multiplication(__global const float* as,
                                     unsigned int K,
                                     unsigned int N)
 {
-    int i = get_group_id(1);
-    int j = get_group_id(0);
-    int local_i = get_local_id(1);
-    int local_j = get_local_id(0);
+    int i = get_global_id(0);
+    int j = get_global_id(1);
+    int local_i = get_local_id(0);
+    int local_j = get_local_id(1);
 
     __local float tileA[TILE_SIZE][TILE_SIZE];
     __local float tileB[TILE_SIZE][TILE_SIZE];
@@ -23,7 +23,7 @@ __kernel void matrix_multiplication(__global const float* as,
     float sum = 0;
     for (int tileK = 0; tileK < K / TILE_SIZE; tileK++) {
         tileA[local_j][local_i] = as[j * K + (tileK * TILE_SIZE + local_i)];
-        tileA[local_j][local_i] = bs[(tileK * TILE_SIZE + local_j) * N + i];
+        tileB[local_j][local_i] = bs[(tileK * TILE_SIZE + local_j) * N + i];
 
         barrier(CLK_LOCAL_MEM_FENCE);
         for (int k = 0; k < TILE_SIZE; k++) {
