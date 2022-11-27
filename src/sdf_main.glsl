@@ -12,24 +12,35 @@ float sdPlane(vec3 p)
 }
 
 // see https://iquilezles.org/articles/distfunctions/
-float sdCapsule( vec3 p, vec3 a, vec3 b, float r )
+float sdCapsule( vec3 p, vec3 a, vec3 fr, float r )
 {
-  // TODO
-    return 0.0;
+    vec3 b = a + fr;
+    vec3 pa = p - a, ba = b - a;
+    float h = clamp( dot(pa,ba)/dot(ba,ba), 0.0, 1.0 );
+    return length( pa - ba*h ) - r;
 }
 
 // smooth minimum function to create gradual transitions between SDFs
 // https://iquilezles.org/articles/smin/
 float smoothmin(float d0, float d1, float k)
 {
-    // TODO
-    return 0.0;
+    float h = max( k-abs(d0-d1), 0.0 )/k;
+    return min( d0, d1 ) - h*h*k*(1.0/4.0);
+}
+
+vec4 chcol(vec4 dCol1, vec4 dCol2)
+{
+    
+    return vec4(
+        min(dCol1.x, dCol2.x),
+        (dCol1.x < dCol2.x) ? dCol1.yzw : dCol2.yzw
+    );
 }
 
 // косинус который пропускает некоторые периоды, удобно чтобы махать ручкой не все время
 float lazycos(float angle)
 {
-    int nsleep = 10;
+    int nsleep = 6;
     
     int iperiod = int(angle / 6.28318530718) % nsleep;
     if (iperiod < 3) {
@@ -46,12 +57,68 @@ vec4 sdBody(vec3 p)
     // body, two spheres with smoothmin
     // TODO
     d = sdSphere((p - vec3(0.0, 0.35, -0.7)), 0.35);
+    d = smoothmin(d, sdSphere((p - vec3(0.0, 0.65, -0.7)), 0.25), 0.2);
     
     // hands, two capsules, can wave with lazycos
-    // TODO
+    d = smoothmin(d, 
+        sdCapsule(
+            (p - vec3(0.0, 0.35, -0.7)), 
+            vec3(-0.25, 0.1, 0.0),
+            vec3(
+                sin(lazycos(iTime*3.0)/3.0 - 0.7)*0.3, 
+                cos(lazycos(iTime*3.0)/3.0 - 0.7)*0.3, 
+                0.0
+            ),
+            0.05
+        ), 
+        0.025);
+    d = smoothmin(d, 
+        sdCapsule(
+            (p - vec3(0.0, 0.35, -0.7)), 
+            vec3(0.25, 0.1, 0.0),
+            vec3(
+                -sin(lazycos(iTime*3.0)/3.0 - 0.7)*0.3, 
+                cos(lazycos(iTime*3.0)/3.0 - 0.7)*0.3, 
+                0.0
+            ),
+            0.05
+        ), 
+        0.025);
     
     // legs, two capsules
-    // TODO
+    // or four?
+    d = smoothmin(d, 
+        sdCapsule(
+            (p - vec3(0.0, 0.35, -0.7)),
+            vec3(-0.20, -0.20, 0.0),
+            vec3(-0.25, 0.05, 0.15),
+            0.05
+        ), 
+        0.025);
+    d = smoothmin(d, 
+        sdCapsule(
+            (p - vec3(0.0, 0.35, -0.7)),
+            vec3(0.20, -0.20, 0.0),
+            vec3(0.25, 0.05, 0.15),
+            0.05
+        ), 
+        0.025);
+    d = smoothmin(d, 
+        sdCapsule(
+            (p - vec3(0.0, 0.35, -0.7)),
+            vec3(-0.45, -0.15, 0.15),
+            vec3(0.5, -0.2, 0.15),
+            0.05
+        ), 
+        0.025);
+    d = smoothmin(d, 
+        sdCapsule(
+            (p - vec3(0.0, 0.35, -0.7)),
+            vec3(0.45, -0.15, 0.15),
+            vec3(-0.5, -0.2, 0.15),
+            0.05
+        ), 
+        0.025);
     
     // return distance and color
     return vec4(d, vec3(0.0, 1.0, 0.0));
@@ -59,9 +126,7 @@ vec4 sdBody(vec3 p)
 
 vec4 sdEyeBall(vec3 p)
 {
-
-    // TODO
-    float d0 = 1e10;
+    float d0 = sdSphere((p - vec3(0.0, 0.60, -0.55)), 0.20);
     
     // return distance and color
     return vec4(d0, vec3(1.0, 1.0, 1.0));
@@ -70,9 +135,7 @@ vec4 sdEyeBall(vec3 p)
 
 vec4 sdEyePupil(vec3 p)
 {
-
-    // TODO
-    float d0 = 1e10;
+    float d0 = sdSphere((p - vec3(0.0, 0.60, -0.38)), 0.07);
     
     // return distance and color
     return vec4(d0, vec3(0.0, 0.0, 0.0));
@@ -82,8 +145,7 @@ vec4 sdEyePupil(vec3 p)
 vec4 sdEyeIris(vec3 p)
 {
 
-    // TODO
-    float d0 = 1e10;
+    float d0 = sdSphere((p - vec3(0.0, 0.60, -0.49)), 0.15);
     
     // return distance and color
     return vec4(d0, vec3(0.0, 1.0, 1.0));
@@ -93,9 +155,11 @@ vec4 sdEyeIris(vec3 p)
 vec4 sdEye(vec3 p)
 {
 
-    vec4 res = vec4(1e10, 0.0, 0.0, 0.0);
+    vec4 ball = sdEyeBall(p);
+    vec4 iris = sdEyeIris(p);
+    vec4 pupil = sdEyePupil(p);
     
-    return res;
+    return chcol(ball, chcol(iris, pupil));
 }
 
 vec4 sdMonster(vec3 p)
@@ -104,14 +168,13 @@ vec4 sdMonster(vec3 p)
     // модифицировать p, чтобы двигать объект как целое
     p -= vec3(0.0, 0.08, 0.0);
     
-    vec4 res = sdBody(p);
-    
+    vec4 body = sdBody(p);
     vec4 eye = sdEye(p);
-    if (eye.x < res.x) {
-        res = eye;
-    }
     
-    return res;
+    vec3 col = chcol(body, eye).yzw;
+    
+    
+    return vec4(smoothmin(body.x, eye.x, 0.03), col);
 }
 
 
