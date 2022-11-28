@@ -5,10 +5,17 @@ float sdSphere(vec3 p, float r)
     return length(p) - r;
 }
 
+// plane is moved as if the monstrik was jumping towards us
+float planeZ() {
+    int nsleep = 9;
+    float time = iTime*5.0 / 6.28318530718 + 3.0;
+    int iperiod = int(time) % nsleep;
+    return (iperiod < 3 ? iTime : float(int(time)/nsleep*nsleep - 3) * 6.28318530718/5.0) ;
+}
 // XZ plane
 float sdPlane(vec3 p)
 {
-    return p.y;
+    return p.y + sin(p.x * 10.0) * sin((p.z + planeZ()) * 10.0) * 0.01;
 }
 
 // see https://iquilezles.org/articles/distfunctions/
@@ -66,7 +73,7 @@ bool isWaving() {
 
 bool isSquatting() {
     int nsleep = 9;
-    int iperiod = int((iTime*5.0 + 3.0 * 6.28318530718) / 6.28318530718) % nsleep;
+    int iperiod = int(iTime*5.0 / 6.28318530718 + 3.0) % nsleep;
     return iperiod < 3;
 }
 
