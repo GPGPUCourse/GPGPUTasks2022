@@ -69,41 +69,55 @@ vec4 sdBody(vec3 p)
 
 vec4 sdEyeBall(vec3 p)
 {
+    float d0 = 0.0, d = 1e10;
 
-    // TODO
-    float d0 = 1e10;
-
+    d0 = sdSphere((p - vec3(0.0, 0.7, -0.5)), 0.22);
+    d = min(d, d0);
     // return distance and color
-    return vec4(d0, vec3(1.0, 1.0, 1.0));
+    return vec4(d, vec3(1.0, 1.0, 1.0));
 
 }
 
 vec4 sdEyePupil(vec3 p)
 {
+    float d0 = 0.0, d = 1e10;
 
-    // TODO
-    float d0 = 1e10;
-
+    d0 = sdSphere((p - vec3(0.0, 0.7, -0.33)), 0.08);
+    d = min(d, d0);
     // return distance and color
-    return vec4(d0, vec3(0.0, 0.0, 0.0));
+    return vec4(d, vec3(0.0, 0.0, 0.0));
 
 }
 
 vec4 sdEyeIris(vec3 p)
 {
+    float d0 = 0.0, d = 1e10;
 
-    // TODO
-    float d0 = 1e10;
-
+    d0 = sdSphere((p - vec3(0.0, 0.7, -0.40)), 0.14);
+    d = min(d, d0);
     // return distance and color
-    return vec4(d0, vec3(0.0, 1.0, 1.0));
+    return vec4(d, vec3(0.0, 1.0, 1.0));
 
 }
 
 vec4 sdEye(vec3 p)
 {
-
     vec4 res = vec4(1e10, 0.0, 0.0, 0.0);
+
+    vec4 b = sdEyeBall(p);
+    if (b[0] < res[0]) {
+        res = b;
+    }
+
+    vec4 pu = sdEyePupil(p);
+    if (pu[0] < res[0]) {
+        res = pu;
+    }
+
+    vec4 i = sdEyeIris(p);
+    if (i[0] < res[0]) {
+        res = i;
+    }
 
     return res;
 }
