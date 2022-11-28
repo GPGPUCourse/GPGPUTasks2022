@@ -40,7 +40,7 @@ vec4 chcol(vec4 dCol1, vec4 dCol2)
 // косинус который пропускает некоторые периоды, удобно чтобы махать ручкой не все время
 float lazycos(float angle)
 {
-    int nsleep = 6;
+    int nsleep = 9;
     
     int iperiod = int(angle / 6.28318530718) % nsleep;
     if (iperiod < 3) {
@@ -50,72 +50,109 @@ float lazycos(float angle)
     return 1.0;
 }
 
+float handsWavingTime() { // 0 to 1, with sleeping at 0
+    return -lazycos(iTime*5.0)/2.0 + 0.5;
+}
+
+float sitStandLoopTime() { // 0 to 1, with sleeping at 0
+    return -lazycos(iTime*5.0 + 3.0 * 6.28318530718)/2.0 + 0.5;
+}
+
+bool isWaving() {
+    int nsleep = 9;
+    int iperiod = int(iTime*5.0 / 6.28318530718) % nsleep;
+    return iperiod < 3;
+}
+
+bool isSquatting() {
+    int nsleep = 9;
+    int iperiod = int((iTime*5.0 + 3.0 * 6.28318530718) / 6.28318530718) % nsleep;
+    return iperiod < 3;
+}
+
 vec4 sdBody(vec3 p)
 {
     float d = 1e10;
+    
+    float bodyY = sitStandLoopTime() * 0.30 + 0.35;
 
     // body, two spheres with smoothmin
-    // TODO
-    d = sdSphere((p - vec3(0.0, 0.35, -0.7)), 0.35);
-    d = smoothmin(d, sdSphere((p - vec3(0.0, 0.65, -0.65)), 0.25), 0.2);
+    d = sdSphere((p - vec3(0.0, bodyY, -0.7)), 0.35);
+    d = smoothmin(d, sdSphere((p - vec3(0.0, bodyY + 0.3, -0.65)), 0.25), 0.2);
     
     // hands, two capsules, can wave with lazycos
+    vec3 limbsP = p - vec3(0.0, bodyY, -0.65);
+    
+    // leftArm
+    float armAngle = -1.0;
+    if (isWaving()) {
+        armAngle = handsWavingTime() * 0.6 - 1.0;
+    } else if (isSquatting()) {
+        armAngle = sitStandLoopTime() * -1.8 - 1.0;
+    }
+    float armX = sin(armAngle) * 0.3;
+    float armY = cos(armAngle) * 0.3;
+    
     d = smoothmin(d, 
         sdCapsule(
-            (p - vec3(0.0, 0.35, -0.65)), 
+            limbsP, 
             vec3(-0.25, 0.1, 0.0),
-            vec3(
-                sin(lazycos(iTime*3.0)/3.0 - 0.7)*0.3, 
-                cos(lazycos(iTime*3.0)/3.0 - 0.7)*0.3, 
-                0.0
-            ),
+            vec3(armX, armY, 0.0),
             0.05
         ), 
         0.025);
     d = smoothmin(d, 
         sdCapsule(
-            (p - vec3(0.0, 0.35, -0.65)), 
+            limbsP, 
             vec3(0.25, 0.1, 0.0),
-            vec3(
-                -sin(lazycos(iTime*3.0)/3.0 - 0.7)*0.3, 
-                cos(lazycos(iTime*3.0)/3.0 - 0.7)*0.3, 
-                0.0
-            ),
+            vec3(-armX, armY, 0.0),
             0.05
         ), 
         0.025);
     
     // legs, two capsules
     // or four?
+    
+    // left knee, relative to the hip
+    float kneeX = -0.45 / 2.0 + (-0.45 / 2.0) * (1.0 - sitStandLoopTime());
+    float kneeY = -0.15 + (-0.3 / 2.0) * sitStandLoopTime();
+    float kneeZ = 0.15 - 0.15 * sitStandLoopTime();
+    
     d = smoothmin(d, 
         sdCapsule(
-            (p - vec3(0.0, 0.35, -0.65)),
-            vec3(-0.20, -0.20, 0.0),
-            vec3(-0.25, 0.05, 0.15),
+            limbsP,
+            vec3(-0.2, -0.2, 0.0),
+            vec3(kneeX + 0.2, kneeY + 0.2, kneeZ),
             0.05
         ), 
         0.025);
     d = smoothmin(d, 
         sdCapsule(
-            (p - vec3(0.0, 0.35, -0.65)),
-            vec3(0.20, -0.20, 0.0),
-            vec3(0.25, 0.05, 0.15),
+            limbsP,
+            vec3(0.2, -0.2, 0.0),
+            vec3(-kneeX - 0.2, kneeY + 0.2, kneeZ),
             0.05
         ), 
         0.025);
+    
+    // left foot, relative to the knee
+    float feetX = 0.5 + -0.5 * sitStandLoopTime();
+    float feetY = -0.20 + (-0.3 / 2.0) * sitStandLoopTime();
+    float feetZ = 0.15 - 0.15 * sitStandLoopTime();
+    
     d = smoothmin(d, 
         sdCapsule(
-            (p - vec3(0.0, 0.35, -0.65)),
-            vec3(-0.45, -0.15, 0.15),
-            vec3(0.5, -0.2, 0.15),
+            limbsP,
+            vec3(kneeX, kneeY, kneeZ),
+            vec3(feetX, feetY, feetZ),
             0.05
         ), 
         0.015);
     d = smoothmin(d, 
         sdCapsule(
-            (p - vec3(0.0, 0.35, -0.65)),
-            vec3(0.45, -0.15, 0.15),
-            vec3(-0.5, -0.2, 0.15),
+            limbsP,
+            vec3(-kneeX, kneeY, kneeZ),
+            vec3(-feetX, feetY, feetZ),
             0.05
         ), 
         0.015);
@@ -154,7 +191,7 @@ vec4 sdEyeIris(vec3 p)
 
 vec4 sdEye(vec3 p)
 {
-
+    // it's not a bug that Y coord is fixed :)
     vec4 ball = sdEyeBall(p);
     vec4 iris = sdEyeIris(p);
     vec4 pupil = sdEyePupil(p);
