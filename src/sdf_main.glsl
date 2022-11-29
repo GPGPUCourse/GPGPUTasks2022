@@ -51,6 +51,7 @@ vec4 sdBody(vec3 p)
     // hands, two capsules, can wave with lazycos
     float h1 = sdCapsule(p, vec3(-0.22, 0.33, -0.9), vec3(-0.4, 0.33 + 0.07*lazycos(7. * iTime), -0.4), 0.06);
     d = min(d, h1);
+    // решил сделать вторую руку тоже анимированной для разнообразия
     float h2 = sdCapsule(p, vec3(0.22, 0.33, -0.9), vec3(0.4, 0.33 + -0.07*lazycos(7. * iTime), -0.4), 0.06);
     d = min(d, h2);
 
