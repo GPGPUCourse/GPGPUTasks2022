@@ -1,3 +1,5 @@
+#define PI 3.14159265359
+#define PIm2 (PI * 2.0)
 
 // sphere with center in (0, 0, 0)
 float sdSphere(vec3 p, float r)
@@ -8,9 +10,19 @@ float sdSphere(vec3 p, float r)
 // plane is moved as if the monstrik was jumping towards us
 float planeZ() {
     int nsleep = 9;
-    float time = iTime*5.0 / 6.28318530718 + 3.0;
-    int iperiod = int(time) % nsleep;
-    return (iperiod < 3 ? iTime : float(int(time)/nsleep*nsleep - 3) * 6.28318530718/5.0) ;
+    float iter = iTime*5.0 / PIm2 + 3.0;
+    int phase = int(iter) % nsleep;
+    
+    float baseTime = float(int(iter)/nsleep*nsleep - 3) * PIm2/5.0;
+    float remTime = iTime - baseTime; // when phase < 3, [-1.2 pi; 0)
+    
+    // when phase < 3, [0; 3); int(jumpPhase) == phase
+    float jumpPhase = 3.0 + remTime / (1.2 * PI) * 3.0;
+    float speedPhase = float(phase) + cos(PI * (jumpPhase - float(phase)));
+    float remZ = (speedPhase - 3.0) / 3.0 * 1.2 * PI;
+    
+    return baseTime + 
+        (phase < 3 ? remZ : 0.0);
 }
 // XZ plane
 float sdPlane(vec3 p)
