@@ -113,7 +113,7 @@ int main(int argc, char **argv)
         for (int iter = 0; iter < benchmarkingIters; ++iter) {
             unsigned int work_group_size_x = 16;
             unsigned int work_group_size_y = 16;
-            matrix_multiplication_kernel2.exec(gpu::WorkSize(work_group_size_x / 4, work_group_size_y, N / 4, M), as_gpu, bs_gpu, cs_gpu, M, K, N);
+            matrix_multiplication_kernel2.exec(gpu::WorkSize(work_group_size_x, work_group_size_y / 4, N, M / 4), as_gpu, bs_gpu, cs_gpu, M, K, N);
 
             t.nextLap();
         }
