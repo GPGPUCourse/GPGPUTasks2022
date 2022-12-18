@@ -22,6 +22,20 @@ void raiseFail(const T &a, const T &b, std::string message, std::string filename
 
 int main(int argc, char **argv)
 {
+    // chooseGPUDevice:
+    // - Если не доступо ни одного устройства - кинет ошибку
+    // - Если доступно ровно одно устройство - вернет это устройство
+    // - Если доступно N>1 устройства:
+    //   - Если аргументов запуска нет или переданное число не находится в диапазоне от 0 до N-1 - кинет ошибку
+    //   - Если аргумент запуска есть и он от 0 до N-1 - вернет устройство под указанным номером
+    gpu::Device device = gpu::chooseGPUDevice(argc, argv);
+
+    // Этот контекст после активации будет прозрачно использоваться при всех вызовах в libgpu библиотеке
+    // это достигается использованием thread-local переменных, т.е. на самом деле контекст будет активирован для текущего потока исполнения
+    gpu::Context context;
+    context.init(device.device_id_opencl);
+    context.activate();
+
 	int benchmarkingIters = 10;
 	unsigned int max_n = (1 << 24);
 
@@ -77,7 +91,45 @@ int main(int argc, char **argv)
 		}
 
 		{
-			// TODO: implement on OpenCL
+            bs.assign(n, 0);
+            gpu::gpu_mem_32u as_gpu, bs_gpu, cs_gpu;
+            as_gpu.resizeN(n);
+            bs_gpu.resizeN(n);
+            cs_gpu.resizeN(n);
+
+            ocl::Kernel prefix_sum_bin(prefix_sum_kernel, prefix_sum_kernel_length, "prefix_sum");
+            prefix_sum_bin.compile();
+            ocl::Kernel prefix_sum_other(prefix_sum_kernel, prefix_sum_kernel_length, "prefix_sum_other");
+            prefix_sum_other.compile();
+
+            unsigned int workGroupSize = 128;
+            unsigned int global_work_size = (n + workGroupSize - 1) / workGroupSize * workGroupSize;
+
+            timer t;
+            for (int iter = 0; iter < benchmarkingIters; ++iter) {
+                as_gpu.writeN(as.data(), n);
+                bs_gpu.writeN(bs.data(), n);
+
+                for (unsigned int level = 0; (1<<level) <= n; level++) {
+                    prefix_sum_bin.exec(gpu::WorkSize(workGroupSize, global_work_size),
+                                        as_gpu, bs_gpu, n, level);
+                    prefix_sum_other.exec(gpu::WorkSize(workGroupSize, global_work_size),
+                                          as_gpu, cs_gpu, n / (1<<(level+1)));
+                    as_gpu.swap(cs_gpu);
+                }
+
+                t.nextLap();
+            }
+
+            bs_gpu.readN(bs.data(), n);
+
+            for (int i = 0; i < n; ++i) {
+                EXPECT_THE_SAME(bs[i], reference_result[i], "GPU results should be equal to CPU results!");
+            }
+
+            std::cout << "GPU: " << t.lapAvg() << "+-" << t.lapStd() << " s" << std::endl;
+            std::cout << "GPU: " << (n / 1000.0 / 1000.0) / t.lapAvg() << " millions/s" << std::endl;
+
 		}
 	}
 }
