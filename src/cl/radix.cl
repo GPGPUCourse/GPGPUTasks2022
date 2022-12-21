@@ -24,6 +24,14 @@ __kernel void radix_counters(__global const unsigned int *as, __global unsigned 
     counters[id] = counter;
 }
 
+__kernel void nullate(__global unsigned int *as, unsigned int n) {
+    const unsigned int id = get_global_id(0);
+    if (id >= n)
+        return;
+
+    as[id] = 0;
+}
+
 
 __kernel void prefix_sum_reduce(__global const unsigned int* a,
                          __global unsigned int* b,
@@ -53,7 +61,7 @@ __kernel void prefix_sum_gather(__global const unsigned int* a,
 }
 
 
-__kernel void local_sort(__local unsigned int *tmp, __local unsigned int *counter, unsigned int offset) {
+__kernel void local_sort(__local unsigned int *tmp, __local unsigned int *counter, unsigned int offset, __global unsigned int *as) {
     unsigned int tmp_counter = 0;
     unsigned int tmp2[SEGMENT_SIZE];
     for (unsigned int i = 0; i < SEGMENT_SIZE; i++) {
@@ -68,12 +76,18 @@ __kernel void local_sort(__local unsigned int *tmp, __local unsigned int *counte
         else
             tmp[j++] = tmp2[k];
     }
+//    for (unsigned int i = 0; i < SEGMENT_SIZE; i++) {
+//        for (unsigned int j = i+1; j < SEGMENT_SIZE; j++) {
+////            if (tmp[i] == tmp[j])
+////                as[1000000] = 10;
+//        }
+//    }
 
     *counter = tmp_counter;
 }
 
 
-__kernel void radix_sort(__global const unsigned int *counters, __global unsigned int *as, unsigned int offset, unsigned int n) {
+__kernel void radix_sort(__global const unsigned int *counters, __global unsigned int *as, __global unsigned int *bs, unsigned int offset, unsigned int n) {
     const unsigned int id = get_global_id(0);
     const unsigned int group_id = get_group_id(0);
     const unsigned int local_id = get_local_id(0);
@@ -94,7 +108,7 @@ __kernel void radix_sort(__global const unsigned int *counters, __global unsigne
         else
             counter_sum = counters[group_id-1];
 
-        local_sort(tmp, &counter, offset);
+        local_sort(tmp, &counter, offset, as);
     }
     barrier(CLK_LOCAL_MEM_FENCE);
 
@@ -105,6 +119,8 @@ __kernel void radix_sort(__global const unsigned int *counters, __global unsigne
     unsigned int new_pos = (local_id < zero_counter
             ? zero_counter_sum + local_id
             : zero_all_count + counter_sum + (local_id - zero_counter));
-    as[new_pos] = tmp[local_id];
+
+    barrier(CLK_GLOBAL_MEM_FENCE);
+    bs[new_pos] = tmp[local_id];
 
 }
