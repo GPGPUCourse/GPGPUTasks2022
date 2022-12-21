@@ -31,11 +31,12 @@ int main(int argc, char **argv) {
     context.activate();
 
     int benchmarkingIters = 10;
-    unsigned int n = 32 * 1024 * 1024;
+    unsigned int n = 1024;
     std::vector<unsigned int> as(n, 0);
     FastRandom r(n);
     for (unsigned int i = 0; i < n; ++i) {
         as[i] = (unsigned int) r.next(0, std::numeric_limits<int>::max());
+//        as[i] = n - i;
     }
     std::cout << "Data generated for n=" << n << "!" << std::endl;
 
@@ -50,23 +51,52 @@ int main(int argc, char **argv) {
         std::cout << "CPU: " << t.lapAvg() << "+-" << t.lapStd() << " s" << std::endl;
         std::cout << "CPU: " << (n / 1000 / 1000) / t.lapAvg() << " millions/s" << std::endl;
     }
-    /*
-    gpu::gpu_mem_32u as_gpu;
+
+    #define SEGMENT_SIZE 128
+    gpu::gpu_mem_32u as_gpu, counters_gpu, counters_bs_gpu, counters_cs_gpu;
     as_gpu.resizeN(n);
+    unsigned int counter_size = n / SEGMENT_SIZE;
+    counters_gpu.resizeN(counter_size);
+    counters_bs_gpu.resizeN(counter_size);
+    counters_cs_gpu.resizeN(counter_size);
+    std::vector<unsigned int> zeros(counter_size, 0);
 
     {
-        ocl::Kernel radix(radix_kernel, radix_kernel_length, "radix");
-        radix.compile();
+        ocl::Kernel radix_counters(radix_kernel, radix_kernel_length, "radix_counters");
+        radix_counters.compile();
+        ocl::Kernel prefix_sum_reduce(radix_kernel, radix_kernel_length, "prefix_sum_reduce");
+        prefix_sum_reduce.compile();
+        ocl::Kernel prefix_sum_gather(radix_kernel, radix_kernel_length, "prefix_sum_gather");
+        prefix_sum_gather.compile();
+        ocl::Kernel radix_sort(radix_kernel, radix_kernel_length, "radix_sort");
+        radix_sort.compile();
 
         timer t;
-        for (int iter = 0; iter < benchmarkingIters; ++iter) {
+        for (int iter = 0; iter < 1; ++iter) {
             as_gpu.writeN(as.data(), n);
 
             t.restart();// Запускаем секундомер после прогрузки данных, чтобы замерять время работы кернела, а не трансфер данных
 
-            unsigned int workGroupSize = 128;
-            unsigned int global_work_size = (n + workGroupSize - 1) / workGroupSize * workGroupSize;
-            radix.exec(gpu::WorkSize(workGroupSize, global_work_size), as_gpu, n);
+            for (unsigned int offset = 0; offset < 32; offset++) {
+                unsigned int workGroupSize = 128;
+                unsigned int global_work_size = (counter_size + workGroupSize - 1) / workGroupSize * workGroupSize;
+                radix_counters.exec(gpu::WorkSize(workGroupSize, global_work_size), as_gpu, counters_gpu, offset, n);
+
+                counters_bs_gpu.writeN(zeros.data(), counter_size);
+
+                for (unsigned int level = 0; (1<<level) <= counter_size; level++) {
+                    prefix_sum_reduce.exec(gpu::WorkSize(workGroupSize, global_work_size),
+                                           counters_gpu, counters_bs_gpu, counter_size, level);
+                    prefix_sum_gather.exec(gpu::WorkSize(workGroupSize, global_work_size),
+                                           counters_gpu, counters_cs_gpu, counter_size / (1<<(level+1)));
+                    counters_gpu.swap(counters_cs_gpu);
+                }
+
+                global_work_size = (n + workGroupSize - 1) / workGroupSize * workGroupSize;
+                radix_sort.exec(gpu::WorkSize(workGroupSize, global_work_size), counters_bs_gpu, as_gpu, offset, n);
+            }
+
+
             t.nextLap();
         }
         std::cout << "GPU: " << t.lapAvg() << "+-" << t.lapStd() << " s" << std::endl;
@@ -74,11 +104,16 @@ int main(int argc, char **argv) {
 
         as_gpu.readN(as.data(), n);
     }
+    std::cout << std::endl;
+    for (int i = 0; i < 128; i++) {
+        std::cout << as[i] << " ";
+    }
+    std::cout << std::endl;
 
     // Проверяем корректность результатов
     for (int i = 0; i < n; ++i) {
         EXPECT_THE_SAME(as[i], cpu_sorted[i], "GPU results should be equal to CPU results!");
     }
-*/
+
     return 0;
 }
