@@ -50,13 +50,15 @@ int main(int argc, char **argv) {
         std::cout << "CPU: " << t.lapAvg() << "+-" << t.lapStd() << " s" << std::endl;
         std::cout << "CPU: " << (n / 1000 / 1000) / t.lapAvg() << " millions/s" << std::endl;
     }
-    /*
+
     gpu::gpu_mem_32f as_gpu;
     as_gpu.resizeN(n);
 
     {
-        ocl::Kernel bitonic(bitonic_kernel, bitonic_kernel_length, "bitonic");
-        bitonic.compile();
+        ocl::Kernel bitonic_big_segment(bitonic_kernel, bitonic_kernel_length, "bitonic_big_segment");
+        bitonic_big_segment.compile();
+        ocl::Kernel bitonic_small_segment(bitonic_kernel, bitonic_kernel_length, "bitonic_small_segment");
+        bitonic_small_segment.compile();
 
         timer t;
         for (int iter = 0; iter < benchmarkingIters; ++iter) {
@@ -66,7 +68,19 @@ int main(int argc, char **argv) {
 
             unsigned int workGroupSize = 128;
             unsigned int global_work_size = (n + workGroupSize - 1) / workGroupSize * workGroupSize;
-            bitonic.exec(gpu::WorkSize(workGroupSize, global_work_size), as_gpu, n);
+            for (unsigned int segment_size = 2; segment_size <= n; segment_size *= 2) {
+                if (segment_size <= workGroupSize) {
+                    unsigned int workGroupSize = segment_size;
+                    unsigned int global_work_size = (n + workGroupSize - 1) / workGroupSize * workGroupSize;
+                    bitonic_small_segment.exec(gpu::WorkSize(workGroupSize, global_work_size),
+                                               as_gpu, segment_size, n);
+                } else {
+                    for (unsigned int size = segment_size; size >= 2; size /= 2) {
+                        bitonic_big_segment.exec(gpu::WorkSize(workGroupSize, global_work_size),
+                                                   as_gpu, segment_size, size, n);
+                    }
+                }
+            }
             t.nextLap();
         }
         std::cout << "GPU: " << t.lapAvg() << "+-" << t.lapStd() << " s" << std::endl;
@@ -79,6 +93,6 @@ int main(int argc, char **argv) {
     for (int i = 0; i < n; ++i) {
         EXPECT_THE_SAME(as[i], cpu_sorted[i], "GPU results should be equal to CPU results!");
     }
-*/
+
     return 0;
 }
