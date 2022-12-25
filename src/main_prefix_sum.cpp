@@ -109,12 +109,17 @@ int main(int argc, char **argv)
             for (int iter = 0; iter < benchmarkingIters; ++iter) {
                 as_gpu.writeN(as.data(), n);
                 bs_gpu.writeN(bs.data(), n);
+                t.restart();
 
                 for (unsigned int level = 0; (1<<level) <= n; level++) {
                     prefix_sum_bin.exec(gpu::WorkSize(workGroupSize, global_work_size),
                                         as_gpu, bs_gpu, n, level);
-                    prefix_sum_other.exec(gpu::WorkSize(workGroupSize, global_work_size),
-                                          as_gpu, cs_gpu, n / (1<<(level+1)));
+
+                    unsigned int global_work_size2 = (n / (1<<(level+1)) + workGroupSize - 1) / workGroupSize * workGroupSize;
+                    if (global_work_size2 > 0) {
+                        prefix_sum_other.exec(gpu::WorkSize(workGroupSize, global_work_size2),
+                                              as_gpu, cs_gpu, n / (1 << (level + 1)));
+                    }
                     as_gpu.swap(cs_gpu);
                 }
 

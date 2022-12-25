@@ -16,7 +16,6 @@ __kernel void prefix_sum(__global const unsigned int* a,
     if (((index+1)>>level) & 1) {
         b[index] += a[((index+1)>>level) - 1];
     }
-
 }
 
 __kernel void prefix_sum_other(__global const unsigned int* a,
