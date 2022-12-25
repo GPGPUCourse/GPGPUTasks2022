@@ -58,12 +58,14 @@ int main(int argc, char **argv) {
         ocl::Kernel merge(merge_kernel, merge_kernel_length, "merge");
         merge.compile();
         timer t;
+        unsigned int localGroupSize = 128;
+        unsigned int workGroupCount = (n + localGroupSize - 1) / localGroupSize * localGroupSize;
         for (int iter = 0; iter < benchmarkingIters; ++iter) {
             as_gpu.writeN(as.data(), n);
             t.restart();// Запускаем секундомер после прогрузки данных, чтобы замерять время работы кернела, а не трансфера данных
             for (int level_size = 2; level_size <= n; level_size*=2) {
-                unsigned int workGroupCount = n / level_size;
-                merge.exec(gpu::WorkSize(1, workGroupCount), as_gpu, bs_gpu, n, level_size);
+                merge.exec(gpu::WorkSize(localGroupSize, workGroupCount), as_gpu, bs_gpu, n, level_size);
+                as_gpu.swap(bs_gpu);
             }
             t.nextLap();
         }
